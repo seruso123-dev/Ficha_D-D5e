@@ -35,7 +35,23 @@ const formatMod = (mod: number) => (mod >= 0 ? `+${mod}` : mod.toString());
 export default function App() {
   const [char, setChar] = useState<CharacterData>(() => {
     const saved = localStorage.getItem('dnd_character_sheet');
-    return saved ? JSON.parse(saved) : INITIAL_DATA;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          ...INITIAL_DATA,
+          ...parsed,
+          spellSlots: parsed.spellSlots || INITIAL_DATA.spellSlots,
+          inventory: parsed.inventory || INITIAL_DATA.inventory,
+          spells: parsed.spells || INITIAL_DATA.spells,
+          skills: parsed.skills ? parsed.skills.map((s: any) => ({ ...s, miscBonus: s.miscBonus || 0 })) : INITIAL_DATA.skills,
+          spellcastingAbility: parsed.spellcastingAbility || INITIAL_DATA.spellcastingAbility
+        };
+      } catch (e) {
+        return INITIAL_DATA;
+      }
+    }
+    return INITIAL_DATA;
   });
 
   const [profBonus, setProfBonus] = useState(2);
@@ -63,7 +79,15 @@ export default function App() {
     reader.onload = (event) => {
       try {
         const json = JSON.parse(event.target?.result as string);
-        setChar(json);
+        setChar({
+          ...INITIAL_DATA,
+          ...json,
+          spellSlots: json.spellSlots || INITIAL_DATA.spellSlots,
+          inventory: json.inventory || INITIAL_DATA.inventory,
+          spells: json.spells || INITIAL_DATA.spells,
+          skills: json.skills ? json.skills.map((s: any) => ({ ...s, miscBonus: s.miscBonus || 0 })) : INITIAL_DATA.skills,
+          spellcastingAbility: json.spellcastingAbility || INITIAL_DATA.spellcastingAbility
+        });
       } catch (err) {
         alert('Erro ao importar arquivo JSON.');
       }

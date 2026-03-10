@@ -9,7 +9,6 @@ interface SpellItemProps {
   spellcastingAbilityMod: number;
   updateSpell: (id: string, field: keyof Spell, value: any) => void;
   removeSpell: (id: string) => void;
-  handleRoll: (formula: string | string[], label: string) => void;
 }
 
 export const SpellItem = React.memo(({ 
@@ -17,8 +16,7 @@ export const SpellItem = React.memo(({
   profBonus, 
   spellcastingAbilityMod, 
   updateSpell, 
-  removeSpell, 
-  handleRoll 
+  removeSpell
 }: SpellItemProps) => {
   return (
     <div className="bg-parchment/50 rounded-sm border border-gold/30 overflow-hidden group shadow-inner">
@@ -44,17 +42,6 @@ export const SpellItem = React.memo(({
         <div className="col-span-10 sm:col-span-3">
           <div className="flex gap-1">
             <input type="text" value={spell.damage || ''} onChange={(e) => updateSpell(spell.id, 'damage', e.target.value)} placeholder="Dano" className="bg-transparent flex-1 font-bold text-center outline-none text-ink border-b border-transparent focus:border-gold/30" />
-            <button 
-              onClick={() => {
-                const attackBonus = profBonus + spellcastingAbilityMod;
-                const formulas = [`1d20${formatMod(attackBonus)}`];
-                if (spell.damage) formulas.push(spell.damage);
-                handleRoll(formulas, spell.name);
-              }}
-              className="p-1 text-accent-red hover:scale-110 transition-transform"
-            >
-              <Zap className="w-4 h-4" />
-            </button>
           </div>
           <div className="text-[10px] uppercase font-bold text-ink/40 text-center">Ataque/Dano</div>
         </div>

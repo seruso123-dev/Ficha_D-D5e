@@ -2,13 +2,11 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { 
   Shield, Sword, Heart, Zap, Save, Download, Upload, Plus, Trash2, 
   ChevronRight, Info, Settings, User, ScrollText, Backpack, Trophy, BookOpen,
-  Image as ImageIcon, Dices, X, Moon, Sun, Search, Filter, RefreshCw, History
+  Image as ImageIcon, X, Moon, Sun, Search, Filter, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toJpeg } from 'html-to-image';
 import { CharacterData, INITIAL_DATA, Ability, Skill, Attack, InventoryItem, Spell } from './types';
-import { rollDice3D } from './systems/diceSystem';
-import { DiceRoller3D } from './components/dice/DiceRoller3D';
 import { formatMod } from './utils/format';
 import { SpellItem } from './components/spells/SpellItem';
 
@@ -82,11 +80,6 @@ export default function App() {
 
   const [profBonus, setProfBonus] = useState(2);
   const [activeTab, setActiveTab] = useState<'combat' | 'spells' | 'equipment' | 'features' | 'details'>('combat');
-  const [rollResult, setRollResult] = useState<{
-    label: string, 
-    results: {formula: string, total: number, rolls: number[], mod: number, op?: string}[]
-  } | null>(null);
-  const [rollHistory, setRollHistory] = useState<{id: string, label: string, total: number, timestamp: number}[]>([]);
   const [isExporting, setIsExporting] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('dnd_dark_mode') === 'true');
   const [spellSearch, setSpellSearch] = useState('');
@@ -98,10 +91,6 @@ export default function App() {
   
   const sheetRef = useRef<HTMLDivElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
-
-  const [isRolling, setIsRolling] = useState(false);
-  const [showManualRoll, setShowManualRoll] = useState(false);
-  const [manualFormula, setManualFormula] = useState('1d20');
 
   useEffect(() => {
     localStorage.setItem('dnd_character_sheet', JSON.stringify(char));
@@ -115,37 +104,6 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [darkMode]);
-
-  const handleRoll = useCallback(async (formula: string | string[], label: string) => {
-    const formulas = Array.isArray(formula) ? formula : [formula];
-    setIsRolling(true);
-    setRollResult(null); // Clear previous result
-    
-    try {
-      const results = [];
-      for (const f of formulas) {
-        const res = await rollDice3D(f);
-        if (res) results.push(res);
-      }
-      
-      if (results.length > 0) {
-        setRollResult({ label, results });
-        
-        results.forEach(res => {
-          setRollHistory(prev => [{
-            id: crypto.randomUUID(),
-            label: results.length > 1 ? `${label} (${res.formula})` : label,
-            total: res.total,
-            timestamp: Date.now()
-          }, ...prev].slice(0, 10));
-        });
-      }
-    } catch (error) {
-      console.error("Error rolling dice:", error);
-    } finally {
-      setTimeout(() => setIsRolling(false), 2000); // Keep overlay for a bit after roll
-    }
-  }, []);
 
   const totalWeight = useMemo(() => {
     return char.inventory.reduce((sum, item) => sum + (parseFloat(item.weight) || 0) * item.quantity, 0);
@@ -324,7 +282,6 @@ export default function App() {
       setChar(INITIAL_DATA);
       setProfBonus(2);
       setActiveTab('combat');
-      setRollHistory([]);
     }
   };
 
@@ -358,110 +315,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen text-ink font-sans selection:bg-gold/30 pb-12">
-      <DiceRoller3D />
       
-      {/* Rolling Overlay */}
-      <AnimatePresence>
-        {isRolling && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[140] bg-ink/50 backdrop-blur-sm flex flex-col items-center justify-center pointer-events-none"
-          >
-            <div className="ff-title text-4xl font-bold text-gold drop-shadow-lg animate-pulse">
-              Rolando Dados...
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Manual Roll Modal */}
-      <AnimatePresence>
-        {showManualRoll && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] bg-ink/80 backdrop-blur-sm flex items-center justify-center p-4"
-          >
-            <motion.div 
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="ff-panel p-6 w-full max-w-sm"
-            >
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold ff-title text-ink">Rolagem Manual</h2>
-                <button onClick={() => setShowManualRoll(false)} className="text-ink/50 hover:text-accent-red">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-widest text-ink/70 mb-1">Fórmula (ex: 1d20+5)</label>
-                  <input 
-                    type="text" 
-                    value={manualFormula}
-                    onChange={(e) => setManualFormula(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleRoll(manualFormula, 'Rolagem Manual');
-                        setShowManualRoll(false);
-                      }
-                    }}
-                    className="w-full bg-parchment-light border border-gold/50 rounded-sm px-3 py-2 text-ink outline-none focus:border-accent-red"
-                    placeholder="1d20+5"
-                    autoFocus
-                  />
-                </div>
-                <button 
-                  onClick={() => {
-                    handleRoll(manualFormula, 'Rolagem Manual');
-                    setShowManualRoll(false);
-                  }}
-                  className="w-full bg-accent-red text-white font-bold py-2 rounded-sm hover:bg-accent-red/90 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Dices className="w-5 h-5" />
-                  Rolar
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Roll Result Popup */}
-      <AnimatePresence>
-        {rollResult && (
-          <motion.div 
-            initial={{ opacity: 0, y: 50, x: '-50%' }}
-            animate={{ opacity: 1, y: 0, x: '-50%' }}
-            exit={{ opacity: 0, y: 50, x: '-50%' }}
-            className="fixed bottom-20 lg:bottom-8 left-1/2 z-[100] bg-ink text-parchment px-6 py-4 rounded-sm border-2 border-gold shadow-2xl flex flex-col items-center gap-4 min-w-[280px]"
-          >
-            <button onClick={() => setRollResult(null)} className="absolute top-1 right-1 text-gold/50 hover:text-gold">
-              <X className="w-4 h-4" />
-            </button>
-            <div className="text-[10px] uppercase font-bold tracking-widest text-gold/70 border-b border-gold/30 w-full text-center pb-1">{rollResult.label}</div>
-            
-            <div className="flex flex-col gap-4 w-full">
-              {rollResult.results.map((res, idx) => (
-                <div key={idx} className="flex items-center justify-between gap-6">
-                  <div className="flex flex-col">
-                    <div className="text-[8px] uppercase text-gold/50">
-                      {res.formula.includes('d20') ? 'Ataque' : 'Dano'} ({res.formula})
-                    </div>
-                    <div className="text-[10px] font-bold">({res.rolls.join(' + ')}) {res.op}{res.mod}</div>
-                  </div>
-                  <div className="text-3xl font-bold ff-title text-gold">{res.total}</div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Exporting Overlay */}
       <AnimatePresence>
         {isExporting && (
@@ -486,10 +340,6 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4">
-          <button onClick={() => setShowManualRoll(true)} className="flex items-center gap-2 px-3 py-1.5 bg-gold/20 hover:bg-gold/40 rounded-sm transition-colors text-sm font-bold border border-gold text-ink">
-            <Dices className="w-4 h-4" />
-            <span className="hidden md:inline ff-title">Rolar Dados</span>
-          </button>
           <button onClick={() => setDarkMode(!darkMode)} className="p-2 hover:bg-gold/10 rounded-sm transition-colors text-ink border border-gold/30">
             {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
@@ -514,35 +364,6 @@ export default function App() {
       </header>
 
       <main ref={sheetRef} className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8 bg-parchment-light dark:bg-parchment transition-colors">
-        {/* Roll History Side Panel (Desktop) */}
-        <div className="fixed right-4 top-24 z-40 hidden xl:block w-64">
-          <div className="ff-panel p-4 max-h-[70vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-gold/30 pb-2 mb-4">
-              <div className="flex items-center gap-2">
-                <History className="w-4 h-4 text-gold" />
-                <span className="text-xs font-bold uppercase tracking-widest ff-title">Histórico</span>
-              </div>
-              {rollHistory.length > 0 && (
-                <button 
-                  onClick={() => setRollHistory([])} 
-                  className="p-1 text-ink/30 hover:text-accent-red transition-colors"
-                  title="Limpar Histórico"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-            <div className="space-y-2">
-              {rollHistory.map(roll => (
-                <div key={roll.id} className="text-xs p-2 bg-ink/5 rounded-sm border border-gold/10 flex justify-between items-center">
-                  <span className="font-medium truncate mr-2">{roll.label}</span>
-                  <span className="font-bold text-accent-red ff-title">{roll.total}</span>
-                </div>
-              ))}
-              {rollHistory.length === 0 && <div className="text-center text-[10px] text-ink/30 italic py-4">Nenhuma rolagem</div>}
-            </div>
-          </div>
-        </div>
         {/* Character Header Info */}
         <section className="ff-panel p-6">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
@@ -596,12 +417,6 @@ export default function App() {
                   <motion.div key={ability} whileHover={{ scale: 1.02 }} className="ff-panel p-4 flex flex-col items-center relative overflow-hidden group">
                     <div className="flex items-center justify-between w-full mb-1">
                       <span className="text-xs font-bold text-ink-light uppercase tracking-widest">{ABILITY_LABELS[ability]}</span>
-                      <button 
-                        onClick={() => handleRoll(`1d20${formatMod(mod)}`, ABILITY_LABELS[ability])}
-                        className="p-1 hover:bg-gold/20 rounded-full transition-colors text-gold"
-                      >
-                        <Dices className="w-3 h-3" />
-                      </button>
                     </div>
                     <span className="text-4xl font-bold text-ink mb-1 ff-title">{formatMod(mod)}</span>
                     <div className="bg-parchment w-full rounded-sm py-1 flex items-center justify-center border border-gold/50 shadow-inner">
@@ -627,12 +442,11 @@ export default function App() {
                   return (
                     <div key={ability} className="flex items-center gap-3 px-3 py-2 rounded-sm hover:bg-ink/5 transition-colors group">
                       <div onClick={() => toggleSavingThrow(ability)} className={`w-3 h-3 rounded-full border-2 transition-all cursor-pointer ${isProficient ? 'bg-accent-red border-accent-red shadow-[0_0_8px_rgba(139,37,0,0.5)]' : 'border-gold/50 group-hover:border-gold'}`} />
-                      <button 
-                        onClick={() => handleRoll(`1d20${formatMod(mod)}`, `Resistência: ${ABILITY_LABELS[ability]}`)}
-                        className="text-sm font-bold text-ink w-8 hover:text-accent-red transition-colors"
+                      <span 
+                        className="text-sm font-bold text-ink w-8"
                       >
                         {formatMod(mod)}
-                      </button>
+                      </span>
                       <span className="text-sm font-medium flex-1">{ABILITY_LABELS[ability]}</span>
                     </div>
                   );
@@ -680,12 +494,11 @@ export default function App() {
                       >
                         {skill.expertise && <div className="w-1 h-1 bg-white rounded-full" />}
                       </div>
-                      <button 
-                        onClick={() => handleRoll(`1d20${formatMod(totalMod)}`, skill.name)}
-                        className="text-sm font-bold text-accent-red w-8 text-center hover:scale-110 transition-transform"
+                      <span 
+                        className="text-sm font-bold text-accent-red w-8 text-center"
                       >
                         {formatMod(totalMod)}
-                      </button>
+                      </span>
                       <div className="flex-1 flex flex-col">
                         <span className="text-xs font-medium">{skill.name}</span>
                         <span className="text-[8px] font-bold text-ink/40 uppercase">{skill.ability.substring(0, 3)}</span>
@@ -832,12 +645,6 @@ export default function App() {
                               <input type="text" value={attack.damage} onChange={(e) => updateAttack(attack.id, 'damage', e.target.value)} className="ff-input w-full text-center text-sm py-1" />
                             </div>
                             <div className="flex gap-2">
-                              <button 
-                                onClick={() => handleRoll([`1d20${formatMod(attack.bonus)}`, attack.damage], attack.name)}
-                                className="bg-accent-red text-white px-3 py-1 rounded-sm text-xs font-bold uppercase hover:bg-accent-red/80 transition-all flex items-center gap-1"
-                              >
-                                <Sword className="w-3 h-3" /> Rolar
-                              </button>
                               <button onClick={() => removeAttack(attack.id)} className="text-ink/30 hover:text-accent-red transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
                             </div>
                           </div>
@@ -1016,7 +823,6 @@ export default function App() {
                               spellcastingAbilityMod={abilityMods[char.spellcastingAbility]}
                               updateSpell={updateSpell}
                               removeSpell={removeSpell}
-                              handleRoll={handleRoll}
                             />
                           ))}
                           {char.spells.length === 0 && <div className="text-center py-12 border-2 border-dashed border-gold/30 rounded-sm text-ink/40 italic">Nenhuma magia adicionada</div>}
@@ -1165,16 +971,6 @@ export default function App() {
             <span className="text-[8px] font-bold uppercase tracking-tighter">{tab.label}</span>
           </button>
         ))}
-        <button 
-          onClick={() => {
-            const historyStr = rollHistory.map(r => `🎲 ${r.label}: ${r.total}`).join('\n');
-            alert(historyStr || 'Nenhuma rolagem no histórico');
-          }}
-          className="flex flex-col items-center gap-1 text-ink-light flex-1"
-        >
-          <History className="w-5 h-5" />
-          <span className="text-[8px] font-bold uppercase tracking-tighter">Log</span>
-        </button>
       </div>
 
       <footer className="mt-12 py-8 border-t border-gold/30 text-center text-ink/40 text-xs font-medium pb-24 lg:pb-8">

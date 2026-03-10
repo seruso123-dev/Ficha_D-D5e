@@ -7,6 +7,10 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { toJpeg } from 'html-to-image';
 import { CharacterData, INITIAL_DATA, Ability, Skill, Attack, InventoryItem, Spell } from './types';
+import { rollDice3D } from './systems/diceSystem';
+import { DiceRoller3D } from './components/dice/DiceRoller3D';
+import { formatMod } from './utils/format';
+import { SpellItem } from './components/spells/SpellItem';
 
 const ABILITY_LABELS: Record<Ability, string> = {
   FOR: 'Força', DES: 'Destreza', CON: 'Constituição',
@@ -14,28 +18,6 @@ const ABILITY_LABELS: Record<Ability, string> = {
 };
 
 const getMod = (score: number) => Math.floor((score - 10) / 2);
-const formatMod = (mod: number) => (mod >= 0 ? `+${mod}` : mod.toString());
-
-const rollDice = (formula: string) => {
-  const regex = /^(\d*)d(\d+)(?:\s*([+-])\s*(\d+))?$/i;
-  const match = formula.trim().replace(/\s+/g, '').match(regex);
-  if (!match) return null;
-
-  const count = parseInt(match[1]) || 1;
-  const sides = parseInt(match[2]);
-  const op = match[3];
-  const mod = match[4] ? parseInt(match[4]) : 0;
-
-  const rolls = [];
-  for (let i = 0; i < count; i++) {
-    rolls.push(Math.floor(Math.random() * sides) + 1);
-  }
-
-  const sum = rolls.reduce((a, b) => a + b, 0);
-  const total = op === '-' ? sum - mod : sum + mod;
-
-  return { formula, rolls, sum, op, mod, total };
-};
 
 const generateCharacter = () => {
   const roll4d6DropLowest = () => {
@@ -117,6 +99,10 @@ export default function App() {
   const sheetRef = useRef<HTMLDivElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
 
+  const [isRolling, setIsRolling] = useState(false);
+  const [showManualRoll, setShowManualRoll] = useState(false);
+  const [manualFormula, setManualFormula] = useState('1d20');
+
   useEffect(() => {
     localStorage.setItem('dnd_character_sheet', JSON.stringify(char));
   }, [char]);
@@ -130,24 +116,34 @@ export default function App() {
     }
   }, [darkMode]);
 
-  const handleRoll = useCallback((formula: string | string[], label: string) => {
+  const handleRoll = useCallback(async (formula: string | string[], label: string) => {
     const formulas = Array.isArray(formula) ? formula : [formula];
-    const results = formulas.map(f => {
-      const res = rollDice(f);
-      return res ? { ...res } : null;
-    }).filter((r): r is any => r !== null);
+    setIsRolling(true);
+    setRollResult(null); // Clear previous result
     
-    if (results.length > 0) {
-      setRollResult({ label, results });
+    try {
+      const results = [];
+      for (const f of formulas) {
+        const res = await rollDice3D(f);
+        if (res) results.push(res);
+      }
       
-      results.forEach(res => {
-        setRollHistory(prev => [{
-          id: crypto.randomUUID(),
-          label: results.length > 1 ? `${label} (${res.formula})` : label,
-          total: res.total,
-          timestamp: Date.now()
-        }, ...prev].slice(0, 10));
-      });
+      if (results.length > 0) {
+        setRollResult({ label, results });
+        
+        results.forEach(res => {
+          setRollHistory(prev => [{
+            id: crypto.randomUUID(),
+            label: results.length > 1 ? `${label} (${res.formula})` : label,
+            total: res.total,
+            timestamp: Date.now()
+          }, ...prev].slice(0, 10));
+        });
+      }
+    } catch (error) {
+      console.error("Error rolling dice:", error);
+    } finally {
+      setTimeout(() => setIsRolling(false), 2000); // Keep overlay for a bit after roll
     }
   }, []);
 
@@ -157,6 +153,28 @@ export default function App() {
 
   const weightLimit = char.abilities.FOR * 15;
   const isOverweight = totalWeight > weightLimit;
+
+  const abilityMods = useMemo(() => {
+    return {
+      FOR: getMod(char.abilities.FOR),
+      DES: getMod(char.abilities.DES),
+      CON: getMod(char.abilities.CON),
+      INT: getMod(char.abilities.INT),
+      SAB: getMod(char.abilities.SAB),
+      CAR: getMod(char.abilities.CAR),
+    };
+  }, [char.abilities]);
+
+  const passivePerception = useMemo(() => {
+    const perceptionSkill = char.skills.find(s => s.name === 'Percepção');
+    let bonus = 0;
+    if (perceptionSkill?.expertise) {
+      bonus = profBonus * 2;
+    } else if (perceptionSkill?.proficient) {
+      bonus = profBonus;
+    }
+    return 10 + abilityMods.SAB + bonus;
+  }, [abilityMods.SAB, char.skills, profBonus]);
 
   const filteredSpells = useMemo(() => {
     return char.spells.filter(spell => {
@@ -340,6 +358,79 @@ export default function App() {
 
   return (
     <div className="min-h-screen text-ink font-sans selection:bg-gold/30 pb-12">
+      <DiceRoller3D />
+      
+      {/* Rolling Overlay */}
+      <AnimatePresence>
+        {isRolling && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[140] bg-ink/50 backdrop-blur-sm flex flex-col items-center justify-center pointer-events-none"
+          >
+            <div className="ff-title text-4xl font-bold text-gold drop-shadow-lg animate-pulse">
+              Rolando Dados...
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Manual Roll Modal */}
+      <AnimatePresence>
+        {showManualRoll && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-ink/80 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="ff-panel p-6 w-full max-w-sm"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold ff-title text-ink">Rolagem Manual</h2>
+                <button onClick={() => setShowManualRoll(false)} className="text-ink/50 hover:text-accent-red">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-widest text-ink/70 mb-1">Fórmula (ex: 1d20+5)</label>
+                  <input 
+                    type="text" 
+                    value={manualFormula}
+                    onChange={(e) => setManualFormula(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleRoll(manualFormula, 'Rolagem Manual');
+                        setShowManualRoll(false);
+                      }
+                    }}
+                    className="w-full bg-parchment-light border border-gold/50 rounded-sm px-3 py-2 text-ink outline-none focus:border-accent-red"
+                    placeholder="1d20+5"
+                    autoFocus
+                  />
+                </div>
+                <button 
+                  onClick={() => {
+                    handleRoll(manualFormula, 'Rolagem Manual');
+                    setShowManualRoll(false);
+                  }}
+                  className="w-full bg-accent-red text-white font-bold py-2 rounded-sm hover:bg-accent-red/90 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Dices className="w-5 h-5" />
+                  Rolar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Roll Result Popup */}
       <AnimatePresence>
         {rollResult && (
@@ -395,6 +486,10 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4">
+          <button onClick={() => setShowManualRoll(true)} className="flex items-center gap-2 px-3 py-1.5 bg-gold/20 hover:bg-gold/40 rounded-sm transition-colors text-sm font-bold border border-gold text-ink">
+            <Dices className="w-4 h-4" />
+            <span className="hidden md:inline ff-title">Rolar Dados</span>
+          </button>
           <button onClick={() => setDarkMode(!darkMode)} className="p-2 hover:bg-gold/10 rounded-sm transition-colors text-ink border border-gold/30">
             {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
@@ -472,7 +567,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="md:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="md:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-4">
               {[
                 { label: 'Nome do Jogador', field: 'playerName' },
                 { label: 'Raça', field: 'race' },
@@ -493,10 +588,10 @@ export default function App() {
           {/* Left Column: Abilities & Skills */}
           <div className="lg:col-span-3 space-y-6">
             {/* Abilities */}
-            <div className="grid grid-cols-2 lg:grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
               {(Object.keys(char.abilities) as Ability[]).map((ability) => {
                 const score = char.abilities[ability];
-                const mod = getMod(score);
+                const mod = abilityMods[ability];
                 return (
                   <motion.div key={ability} whileHover={{ scale: 1.02 }} className="ff-panel p-4 flex flex-col items-center relative overflow-hidden group">
                     <div className="flex items-center justify-between w-full mb-1">
@@ -528,7 +623,7 @@ export default function App() {
               <div className="p-2 space-y-1">
                 {(Object.keys(char.abilities) as Ability[]).map((ability) => {
                   const isProficient = char.proficiencies.includes(ability);
-                  const mod = getMod(char.abilities[ability]) + (isProficient ? profBonus : 0);
+                  const mod = abilityMods[ability] + (isProficient ? profBonus : 0);
                   return (
                     <div key={ability} className="flex items-center gap-3 px-3 py-2 rounded-sm hover:bg-ink/5 transition-colors group">
                       <div onClick={() => toggleSavingThrow(ability)} className={`w-3 h-3 rounded-full border-2 transition-all cursor-pointer ${isProficient ? 'bg-accent-red border-accent-red shadow-[0_0_8px_rgba(139,37,0,0.5)]' : 'border-gold/50 group-hover:border-gold'}`} />
@@ -552,7 +647,7 @@ export default function App() {
                 <span className="text-xs font-medium text-ink/50">(Sabedoria)</span>
               </div>
               <div className="text-2xl font-bold text-accent-red ff-title">
-                {10 + getMod(char.abilities.SAB) + (char.skills.find(s => s.name === 'Percepção')?.proficient ? profBonus : 0)}
+                {passivePerception}
               </div>
             </div>
 
@@ -566,7 +661,7 @@ export default function App() {
               </div>
               <div className="p-2 space-y-1">
                 {char.skills.map((skill, idx) => {
-                  const abilityMod = getMod(char.abilities[skill.ability]);
+                  const abilityMod = abilityMods[skill.ability];
                   const profMod = skill.expertise ? profBonus * 2 : (skill.proficient ? profBonus : 0);
                   const miscMod = skill.miscBonus || 0;
                   const totalMod = abilityMod + profMod + miscMod;
@@ -650,7 +745,7 @@ export default function App() {
               <div className="h-4 bg-parchment rounded-sm overflow-hidden border border-gold/50 shadow-inner">
                 <motion.div initial={{ width: 0 }} animate={{ width: `${hpPercent}%` }} className="h-full bg-gradient-to-r from-accent-red to-[#b33900] shadow-[0_0_10px_rgba(139,37,0,0.4)]" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <div className="text-[10px] font-bold uppercase text-ink-light px-1">Vida Temporária</div>
                   <input type="number" value={char.hpTemp} onChange={(e) => updateField('hpTemp', parseInt(e.target.value) || 0)} className="ff-input w-full px-2 py-1" />
@@ -770,7 +865,7 @@ export default function App() {
                       {/* Coins */}
                       <div className="bg-parchment/50 p-4 rounded-sm border border-gold/30 shadow-inner">
                         <div className="text-[10px] font-bold uppercase text-ink-light mb-3 tracking-widest text-center ff-title">Moedas</div>
-                        <div className="grid grid-cols-5 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                           {[
                             { key: 'cp', label: 'PC', color: 'text-amber-700' },
                             { key: 'sp', label: 'PE', color: 'text-slate-500' },
@@ -832,7 +927,7 @@ export default function App() {
                   {activeTab === 'spells' && (
                     <motion.div key="spells" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
                       {/* Spellcasting Header */}
-                      <div className="bg-parchment/50 p-4 rounded-sm border border-gold/30 grid grid-cols-4 gap-4 shadow-inner">
+                      <div className="bg-parchment/50 p-4 rounded-sm border border-gold/30 grid grid-cols-1 sm:grid-cols-4 gap-4 shadow-inner">
                         <div className="text-center col-span-1">
                           <div className="text-[10px] uppercase font-bold text-ink/50">Classe</div>
                           <input type="text" value={char.spellcastingClass} onChange={(e) => updateField('spellcastingClass', e.target.value)} className="bg-transparent font-bold outline-none text-ink w-full text-center border-b border-transparent focus:border-gold/30" placeholder="Ex: Mago" />
@@ -845,11 +940,11 @@ export default function App() {
                         </div>
                         <div className="text-center col-span-1 border-l border-gold/30">
                           <div className="text-[10px] uppercase font-bold text-ink/50">CD Magia</div>
-                          <div className="text-xl font-bold ff-title">{8 + profBonus + getMod(char.abilities[char.spellcastingAbility])}</div>
+                          <div className="text-xl font-bold ff-title">{8 + profBonus + abilityMods[char.spellcastingAbility]}</div>
                         </div>
                         <div className="text-center col-span-1 border-l border-gold/30">
                           <div className="text-[10px] uppercase font-bold text-ink/50">Ataque</div>
-                          <div className="text-xl font-bold ff-title">{formatMod(profBonus + getMod(char.abilities[char.spellcastingAbility]))}</div>
+                          <div className="text-xl font-bold ff-title">{formatMod(profBonus + abilityMods[char.spellcastingAbility])}</div>
                         </div>
                       </div>
 
@@ -887,7 +982,7 @@ export default function App() {
                       </div>
 
                       {/* Spell Slots */}
-                      <div className="grid grid-cols-3 sm:grid-cols-9 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-9 gap-2">
                         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(lvl => (
                           <div key={lvl} className="bg-parchment/50 p-2 rounded-sm border border-gold/30 text-center shadow-inner">
                             <div className="text-[8px] uppercase font-bold text-ink/50 mb-1">Nível {lvl}</div>
@@ -914,63 +1009,15 @@ export default function App() {
 
                         <div className="space-y-4">
                           {filteredSpells.map((spell) => (
-                            <div key={spell.id} className="bg-parchment/50 rounded-sm border border-gold/30 overflow-hidden group shadow-inner">
-                              <div className="p-4 grid grid-cols-12 gap-4 items-center">
-                                <div className="col-span-1 flex justify-center">
-                                  <div onClick={() => updateSpell(spell.id, 'prepared', !spell.prepared)} className={`w-4 h-4 rounded-full border-2 cursor-pointer transition-all ${spell.prepared ? 'bg-accent-red border-accent-red shadow-[0_0_8px_rgba(139,37,0,0.5)]' : 'border-gold/50'}`} />
-                                </div>
-                                <div className="col-span-11 sm:col-span-4">
-                                  <input type="text" value={spell.name} onChange={(e) => updateSpell(spell.id, 'name', e.target.value)} className="bg-transparent w-full font-bold outline-none focus:text-accent-red text-ink border-b border-transparent focus:border-gold/30" />
-                                  <div className="text-[10px] uppercase font-bold text-ink/40">Nome da Magia</div>
-                                </div>
-                                <div className="col-span-4 sm:col-span-1">
-                                  <input type="number" value={spell.level} onChange={(e) => updateSpell(spell.id, 'level', parseInt(e.target.value) || 0)} className="bg-transparent w-full font-bold text-center outline-none text-ink border-b border-transparent focus:border-gold/30" />
-                                  <div className="text-[10px] uppercase font-bold text-ink/40 text-center">Nível</div>
-                                </div>
-                                <div className="col-span-6 sm:col-span-2">
-                                  <input type="text" value={spell.school} onChange={(e) => updateSpell(spell.id, 'school', e.target.value)} className="bg-transparent w-full font-bold text-center outline-none text-ink border-b border-transparent focus:border-gold/30" />
-                                  <div className="text-[10px] uppercase font-bold text-ink/40 text-center">Escola</div>
-                                </div>
-                                <div className="col-span-10 sm:col-span-3">
-                                  <div className="flex gap-1">
-                                    <input type="text" value={spell.damage || ''} onChange={(e) => updateSpell(spell.id, 'damage', e.target.value)} placeholder="Dano" className="bg-transparent flex-1 font-bold text-center outline-none text-ink border-b border-transparent focus:border-gold/30" />
-                                    <button 
-                                      onClick={() => {
-                                        const attackBonus = profBonus + getMod(char.abilities[char.spellcastingAbility]);
-                                        const formulas = [`1d20${formatMod(attackBonus)}`];
-                                        if (spell.damage) formulas.push(spell.damage);
-                                        handleRoll(formulas, spell.name);
-                                      }}
-                                      className="p-1 text-accent-red hover:scale-110 transition-transform"
-                                    >
-                                      <Zap className="w-4 h-4" />
-                                    </button>
-                                  </div>
-                                  <div className="text-[10px] uppercase font-bold text-ink/40 text-center">Ataque/Dano</div>
-                                </div>
-                                <div className="col-span-2 sm:col-span-1 flex justify-end">
-                                  <button onClick={() => removeSpell(spell.id)} className="text-ink/30 hover:text-accent-red transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
-                                </div>
-                              </div>
-                              
-                              <div className="px-4 pb-4 grid grid-cols-3 gap-4">
-                                <div>
-                                  <div className="text-[8px] uppercase font-bold text-ink/50">Tempo</div>
-                                  <input type="text" value={spell.castingTime} onChange={(e) => updateSpell(spell.id, 'castingTime', e.target.value)} className="ff-input w-full text-[10px] py-1" />
-                                </div>
-                                <div>
-                                  <div className="text-[8px] uppercase font-bold text-ink/50">Alcance</div>
-                                  <input type="text" value={spell.range} onChange={(e) => updateSpell(spell.id, 'range', e.target.value)} className="ff-input w-full text-[10px] py-1" />
-                                </div>
-                                <div>
-                                  <div className="text-[8px] uppercase font-bold text-ink/50">Componentes</div>
-                                  <input type="text" value={spell.components} onChange={(e) => updateSpell(spell.id, 'components', e.target.value)} className="ff-input w-full text-[10px] py-1" />
-                                </div>
-                              </div>
-                              <div className="px-4 pb-4">
-                                <textarea value={spell.description} onChange={(e) => updateSpell(spell.id, 'description', e.target.value)} placeholder="Descrição da magia..." className="ff-textarea w-full p-2 rounded-sm text-xs h-20 resize-none" />
-                              </div>
-                            </div>
+                            <SpellItem 
+                              key={spell.id}
+                              spell={spell}
+                              profBonus={profBonus}
+                              spellcastingAbilityMod={abilityMods[char.spellcastingAbility]}
+                              updateSpell={updateSpell}
+                              removeSpell={removeSpell}
+                              handleRoll={handleRoll}
+                            />
                           ))}
                           {char.spells.length === 0 && <div className="text-center py-12 border-2 border-dashed border-gold/30 rounded-sm text-ink/40 italic">Nenhuma magia adicionada</div>}
                         </div>
@@ -980,7 +1027,7 @@ export default function App() {
 
                   {activeTab === 'details' && (
                     <motion.div key="details" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-6 gap-4">
                         {[
                           { label: 'Idade', field: 'age' }, { label: 'Altura', field: 'height' }, { label: 'Peso', field: 'weight' },
                           { label: 'Olhos', field: 'eyes' }, { label: 'Pele', field: 'skin' }, { label: 'Cabelos', field: 'hair' }
@@ -1142,14 +1189,14 @@ export default function App() {
             <p className="text-xl text-ink-light uppercase tracking-[0.3em] mt-2">{char.classLevel} • {char.race}</p>
           </div>
 
-          <div className="grid grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
             {/* Column 1: Stats & Skills */}
             <div className="space-y-8">
               <div className="grid grid-cols-2 gap-4">
                 {(Object.keys(char.abilities) as Ability[]).map(a => (
                   <div key={a} className="ff-panel p-4 text-center">
                     <div className="text-xs font-bold uppercase text-ink-light">{ABILITY_LABELS[a]}</div>
-                    <div className="text-4xl font-bold ff-title">{formatMod(getMod(char.abilities[a]))}</div>
+                    <div className="text-4xl font-bold ff-title">{formatMod(abilityMods[a])}</div>
                     <div className="text-sm font-bold text-ink/50">Score: {char.abilities[a]}</div>
                   </div>
                 ))}
@@ -1160,7 +1207,7 @@ export default function App() {
                   {char.skills.map(s => (
                     <div key={s.name} className="flex justify-between text-sm">
                       <span className={s.proficient ? 'font-bold text-accent-red' : ''}>{s.name}</span>
-                      <span className="font-mono">{formatMod(getMod(char.abilities[s.ability]) + (s.proficient ? profBonus : 0) + (s.miscBonus || 0))}</span>
+                      <span className="font-mono">{formatMod(abilityMods[s.ability] + (s.proficient ? profBonus : 0) + (s.miscBonus || 0))}</span>
                     </div>
                   ))}
                 </div>
@@ -1169,7 +1216,7 @@ export default function App() {
 
             {/* Column 2: Combat & Portrait */}
             <div className="space-y-8">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="ff-panel p-4 text-center">
                   <div className="text-xs font-bold uppercase">AC</div>
                   <div className="text-3xl font-bold">{char.ac}</div>

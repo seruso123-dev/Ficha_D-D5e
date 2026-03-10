@@ -4,14 +4,14 @@ export interface Skill {
   name: string;
   ability: Ability;
   proficient: boolean;
-  expertise?: boolean;
+  expertise: boolean;
   miscBonus?: number;
 }
 
 export interface Attack {
   id: string;
   name: string;
-  bonus: string;
+  bonus: number;
   damage: string;
 }
 
@@ -33,6 +33,7 @@ export interface Spell {
   components: string;
   description: string;
   prepared: boolean;
+  damage?: string;
 }
 
 export interface SpellSlots {
@@ -142,24 +143,24 @@ export const INITIAL_DATA: CharacterData = {
     failures: 0
   },
   skills: [
-    { name: 'Acrobacia', ability: 'DES', proficient: false, miscBonus: 0 },
-    { name: 'Arcanismo', ability: 'INT', proficient: false, miscBonus: 0 },
-    { name: 'Atletismo', ability: 'FOR', proficient: false, miscBonus: 0 },
-    { name: 'Atuação', ability: 'CAR', proficient: false, miscBonus: 0 },
-    { name: 'Blefar', ability: 'CAR', proficient: false, miscBonus: 0 },
-    { name: 'Furtividade', ability: 'DES', proficient: false, miscBonus: 0 },
-    { name: 'História', ability: 'INT', proficient: false, miscBonus: 0 },
-    { name: 'Intimidação', ability: 'CAR', proficient: false, miscBonus: 0 },
-    { name: 'Intuição', ability: 'SAB', proficient: false, miscBonus: 0 },
-    { name: 'Investigação', ability: 'INT', proficient: false, miscBonus: 0 },
-    { name: 'Lidar com Animais', ability: 'SAB', proficient: false, miscBonus: 0 },
-    { name: 'Medicina', ability: 'SAB', proficient: false, miscBonus: 0 },
-    { name: 'Natureza', ability: 'INT', proficient: false, miscBonus: 0 },
-    { name: 'Percepção', ability: 'SAB', proficient: false, miscBonus: 0 },
-    { name: 'Persuasão', ability: 'CAR', proficient: false, miscBonus: 0 },
-    { name: 'Prestidigitação', ability: 'DES', proficient: false, miscBonus: 0 },
-    { name: 'Religião', ability: 'INT', proficient: false, miscBonus: 0 },
-    { name: 'Sobrevivência', ability: 'SAB', proficient: false, miscBonus: 0 }
+    { name: 'Acrobacia', ability: 'DES', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Arcanismo', ability: 'INT', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Atletismo', ability: 'FOR', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Atuação', ability: 'CAR', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Blefar', ability: 'CAR', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Furtividade', ability: 'DES', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'História', ability: 'INT', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Intimidação', ability: 'CAR', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Intuição', ability: 'SAB', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Investigação', ability: 'INT', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Lidar com Animais', ability: 'SAB', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Medicina', ability: 'SAB', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Natureza', ability: 'INT', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Percepção', ability: 'SAB', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Persuasão', ability: 'CAR', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Prestidigitação', ability: 'DES', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Religião', ability: 'INT', proficient: false, expertise: false, miscBonus: 0 },
+    { name: 'Sobrevivência', ability: 'SAB', proficient: false, expertise: false, miscBonus: 0 }
   ],
   attacks: [],
   inventory: [],

@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Shield, Sword, Heart, Zap, Save, Download, Upload, Plus, Trash2, 
-  ChevronRight, Info, Settings, User, ScrollText, Backpack, Trophy, BookOpen
+  ChevronRight, Info, Settings, User, ScrollText, Backpack, Trophy, BookOpen,
+  Image as ImageIcon, Dices, X, Moon, Sun, Search, Filter, RefreshCw, History
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { toJpeg } from 'html-to-image';
 import { CharacterData, INITIAL_DATA, Ability, Skill, Attack, InventoryItem, Spell } from './types';
 
 const ABILITY_LABELS: Record<Ability, string> = {
@@ -13,6 +15,58 @@ const ABILITY_LABELS: Record<Ability, string> = {
 
 const getMod = (score: number) => Math.floor((score - 10) / 2);
 const formatMod = (mod: number) => (mod >= 0 ? `+${mod}` : mod.toString());
+
+const rollDice = (formula: string) => {
+  const regex = /^(\d*)d(\d+)(?:\s*([+-])\s*(\d+))?$/i;
+  const match = formula.trim().replace(/\s+/g, '').match(regex);
+  if (!match) return null;
+
+  const count = parseInt(match[1]) || 1;
+  const sides = parseInt(match[2]);
+  const op = match[3];
+  const mod = match[4] ? parseInt(match[4]) : 0;
+
+  const rolls = [];
+  for (let i = 0; i < count; i++) {
+    rolls.push(Math.floor(Math.random() * sides) + 1);
+  }
+
+  const sum = rolls.reduce((a, b) => a + b, 0);
+  const total = op === '-' ? sum - mod : sum + mod;
+
+  return { formula, rolls, sum, op, mod, total };
+};
+
+const generateCharacter = () => {
+  const roll4d6DropLowest = () => {
+    const rolls = Array.from({ length: 4 }, () => Math.floor(Math.random() * 6) + 1);
+    rolls.sort((a, b) => b - a);
+    return rolls.slice(0, 3).reduce((a, b) => a + b, 0);
+  };
+
+  const races = ['Humano', 'Elfo', 'Anão', 'Halfling', 'Draconato', 'Tiefling', 'Gnomo', 'Meio-Elfo', 'Meio-Orc'];
+  const classes = ['Guerreiro', 'Mago', 'Clérigo', 'Ladino', 'Paladino', 'Bardo', 'Ranger', 'Feiticeiro', 'Bruxo', 'Monge', 'Bárbaro', 'Druida'];
+  const alignments = ['Leal e Bom', 'Neutro e Bom', 'Caótico e Bom', 'Leal e Neutro', 'Neutro', 'Caótico e Neutro', 'Leal e Mau', 'Neutro e Mau', 'Caótico e Mau'];
+  const names = ['Aragorn', 'Legolas', 'Gimli', 'Gandalf', 'Frodo', 'Bilbo', 'Boromir', 'Eowyn', 'Galadriel', 'Elrond', 'Thranduil', 'Thorin'];
+
+  const abilities: Record<Ability, number> = {
+    FOR: roll4d6DropLowest(),
+    DES: roll4d6DropLowest(),
+    CON: roll4d6DropLowest(),
+    INT: roll4d6DropLowest(),
+    SAB: roll4d6DropLowest(),
+    CAR: roll4d6DropLowest()
+  };
+
+  return {
+    ...INITIAL_DATA,
+    name: names[Math.floor(Math.random() * names.length)],
+    race: races[Math.floor(Math.random() * races.length)],
+    classLevel: `${classes[Math.floor(Math.random() * classes.length)]} 1`,
+    alignment: alignments[Math.floor(Math.random() * alignments.length)],
+    abilities
+  };
+};
 
 const Tooltip = ({ children, text }: { children: React.ReactNode, text: string }) => (
   <div className="ff-tooltip inline-flex items-center">
@@ -46,12 +100,93 @@ export default function App() {
 
   const [profBonus, setProfBonus] = useState(2);
   const [activeTab, setActiveTab] = useState<'combat' | 'spells' | 'equipment' | 'features' | 'details'>('combat');
+  const [rollResult, setRollResult] = useState<{
+    label: string, 
+    results: {formula: string, total: number, rolls: number[], mod: number, op?: string}[]
+  } | null>(null);
+  const [rollHistory, setRollHistory] = useState<{id: string, label: string, total: number, timestamp: number}[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('dnd_dark_mode') === 'true');
+  const [spellSearch, setSpellSearch] = useState('');
+  const [spellFilter, setSpellFilter] = useState<{level: number | 'all', prepared: boolean | 'all', school: string | 'all'}>({
+    level: 'all',
+    prepared: 'all',
+    school: 'all'
+  });
+  
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     localStorage.setItem('dnd_character_sheet', JSON.stringify(char));
   }, [char]);
 
-  const handleExport = () => {
+  useEffect(() => {
+    localStorage.setItem('dnd_dark_mode', darkMode.toString());
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
+  const handleRoll = useCallback((formula: string | string[], label: string) => {
+    const formulas = Array.isArray(formula) ? formula : [formula];
+    const results = formulas.map(f => {
+      const res = rollDice(f);
+      return res ? { ...res } : null;
+    }).filter((r): r is any => r !== null);
+    
+    if (results.length > 0) {
+      setRollResult({ label, results });
+      
+      results.forEach(res => {
+        setRollHistory(prev => [{
+          id: crypto.randomUUID(),
+          label: results.length > 1 ? `${label} (${res.formula})` : label,
+          total: res.total,
+          timestamp: Date.now()
+        }, ...prev].slice(0, 10));
+      });
+    }
+  }, []);
+
+  const totalWeight = useMemo(() => {
+    return char.inventory.reduce((sum, item) => sum + (parseFloat(item.weight) || 0) * item.quantity, 0);
+  }, [char.inventory]);
+
+  const weightLimit = char.abilities.FOR * 15;
+  const isOverweight = totalWeight > weightLimit;
+
+  const filteredSpells = useMemo(() => {
+    return char.spells.filter(spell => {
+      const matchesSearch = spell.name.toLowerCase().includes(spellSearch.toLowerCase());
+      const matchesLevel = spellFilter.level === 'all' || spell.level === spellFilter.level;
+      const matchesPrepared = spellFilter.prepared === 'all' || spell.prepared === spellFilter.prepared;
+      const matchesSchool = spellFilter.school === 'all' || spell.school === spellFilter.school;
+      return matchesSearch && matchesLevel && matchesPrepared && matchesSchool;
+    });
+  }, [char.spells, spellSearch, spellFilter]);
+
+  const toggleSkillState = (index: number) => {
+    const newSkills = [...char.skills];
+    const skill = newSkills[index];
+    
+    if (!skill.proficient && !skill.expertise) {
+      skill.proficient = true;
+      skill.expertise = false;
+    } else if (skill.proficient && !skill.expertise) {
+      skill.proficient = true;
+      skill.expertise = true;
+    } else {
+      skill.proficient = false;
+      skill.expertise = false;
+    }
+    
+    updateField('skills', newSkills);
+  };
+
+  const handleExportJson = () => {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(char));
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href", dataStr);
@@ -59,6 +194,35 @@ export default function App() {
     document.body.appendChild(downloadAnchorNode);
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
+  };
+
+  const handleExportJpg = async () => {
+    setIsExporting(true);
+    // Wait for the hidden full-sheet to render
+    setTimeout(async () => {
+      if (exportRef.current === null) {
+        setIsExporting(false);
+        return;
+      }
+      
+      try {
+        const dataUrl = await toJpeg(exportRef.current, { 
+          quality: 0.95, 
+          backgroundColor: '#e8e0c8',
+          style: { borderRadius: '0' }
+        });
+        
+        const link = document.createElement('a');
+        link.download = `${char.name || 'personagem'}.jpg`;
+        link.href = dataUrl;
+        link.click();
+      } catch (err) {
+        console.error('Erro ao gerar JPG:', err);
+        alert('Erro ao gerar imagem JPG.');
+      } finally {
+        setIsExporting(false);
+      }
+    }, 500);
   };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,15 +270,15 @@ export default function App() {
   };
 
   const addAttack = () => {
-    const newAttack: Attack = { id: Math.random().toString(36).substr(2, 9), name: 'Novo Ataque', bonus: '+0', damage: '1d6' };
+    const newAttack: Attack = { id: crypto.randomUUID(), name: 'Novo Ataque', bonus: 0, damage: '1d6' };
     updateField('attacks', [...char.attacks, newAttack]);
   };
 
   const removeAttack = (id: string) => updateField('attacks', char.attacks.filter(a => a.id !== id));
-  const updateAttack = (id: string, field: keyof Attack, value: string) => updateField('attacks', char.attacks.map(a => a.id === id ? { ...a, [field]: value } : a));
+  const updateAttack = (id: string, field: keyof Attack, value: any) => updateField('attacks', char.attacks.map(a => a.id === id ? { ...a, [field]: value } : a));
 
   const addInventoryItem = () => {
-    const newItem: InventoryItem = { id: Math.random().toString(36).substr(2, 9), name: 'Novo Item', quantity: 1, weight: '0', description: '' };
+    const newItem: InventoryItem = { id: crypto.randomUUID(), name: 'Novo Item', quantity: 1, weight: '0', description: '' };
     updateField('inventory', [...char.inventory, newItem]);
   };
 
@@ -122,7 +286,7 @@ export default function App() {
   const updateInventoryItem = (id: string, field: keyof InventoryItem, value: any) => updateField('inventory', char.inventory.map(i => i.id === id ? { ...i, [field]: value } : i));
 
   const addSpell = () => {
-    const newSpell: Spell = { id: Math.random().toString(36).substr(2, 9), name: 'Nova Magia', level: 0, school: 'Abjuração', castingTime: '1 ação', range: 'Pessoal', components: 'V, S', description: '', prepared: false };
+    const newSpell: Spell = { id: crypto.randomUUID(), name: 'Nova Magia', level: 0, school: 'Abjuração', castingTime: '1 ação', range: 'Pessoal', components: 'V, S', description: '', prepared: false };
     updateField('spells', [...char.spells, newSpell]);
   };
 
@@ -138,7 +302,12 @@ export default function App() {
   };
 
   const resetCharacter = () => {
-    if (confirm('Tem certeza que deseja limpar toda a ficha?')) setChar(INITIAL_DATA);
+    if (confirm('Tem certeza que deseja limpar toda a ficha?')) {
+      setChar(INITIAL_DATA);
+      setProfBonus(2);
+      setActiveTab('combat');
+      setRollHistory([]);
+    }
   };
 
   const toggleSavingThrow = (ability: Ability) => {
@@ -156,9 +325,67 @@ export default function App() {
     updateAttack(id, 'damage', valid);
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      updateField('portrait', base64);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const hpPercent = char.hpMax > 0 ? Math.min(100, (char.hpCurrent / char.hpMax) * 100) : 0;
+
   return (
     <div className="min-h-screen text-ink font-sans selection:bg-gold/30 pb-12">
-      {/* Top Navigation Bar */}
+      {/* Roll Result Popup */}
+      <AnimatePresence>
+        {rollResult && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 50, x: '-50%' }}
+            className="fixed bottom-20 lg:bottom-8 left-1/2 z-[100] bg-ink text-parchment px-6 py-4 rounded-sm border-2 border-gold shadow-2xl flex flex-col items-center gap-4 min-w-[280px]"
+          >
+            <button onClick={() => setRollResult(null)} className="absolute top-1 right-1 text-gold/50 hover:text-gold">
+              <X className="w-4 h-4" />
+            </button>
+            <div className="text-[10px] uppercase font-bold tracking-widest text-gold/70 border-b border-gold/30 w-full text-center pb-1">{rollResult.label}</div>
+            
+            <div className="flex flex-col gap-4 w-full">
+              {rollResult.results.map((res, idx) => (
+                <div key={idx} className="flex items-center justify-between gap-6">
+                  <div className="flex flex-col">
+                    <div className="text-[8px] uppercase text-gold/50">
+                      {res.formula.includes('d20') ? 'Ataque' : 'Dano'} ({res.formula})
+                    </div>
+                    <div className="text-[10px] font-bold">({res.rolls.join(' + ')}) {res.op}{res.mod}</div>
+                  </div>
+                  <div className="text-3xl font-bold ff-title text-gold">{res.total}</div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Exporting Overlay */}
+      <AnimatePresence>
+        {isExporting && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-parchment/80 backdrop-blur-sm flex flex-col items-center justify-center"
+          >
+            <div className="w-12 h-12 border-4 border-gold border-t-accent-red rounded-full animate-spin mb-4" />
+            <div className="ff-title text-xl font-bold text-ink">Gerando Ficha Completa...</div>
+            <div className="text-sm text-ink-light mt-2">Isso pode levar alguns segundos</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <header className="sticky top-0 z-50 bg-parchment-light/90 backdrop-blur-md border-b border-gold shadow-md px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 bg-ink rounded-sm flex items-center justify-center border border-gold shadow-sm">
@@ -168,27 +395,59 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4">
+          <button onClick={() => setDarkMode(!darkMode)} className="p-2 hover:bg-gold/10 rounded-sm transition-colors text-ink border border-gold/30">
+            {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
           <button onClick={resetCharacter} className="flex items-center gap-2 px-3 py-1.5 hover:bg-accent-red/10 rounded-sm transition-colors text-sm font-medium text-accent-red border border-transparent hover:border-accent-red/30">
             <Trash2 className="w-4 h-4" />
             <span className="hidden md:inline ff-title">Limpar</span>
           </button>
-          <button onClick={handleExport} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gold/10 rounded-sm transition-colors text-sm font-medium border border-gold/50 text-ink">
-            <Download className="w-4 h-4" />
+          <button onClick={handleExportJpg} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gold/10 rounded-sm transition-colors text-sm font-medium border border-gold/50 text-ink">
+            <ImageIcon className="w-4 h-4" />
             <span className="hidden md:inline ff-title">Exportar</span>
           </button>
           <label className="flex items-center gap-2 px-3 py-1.5 hover:bg-gold/10 rounded-sm transition-colors text-sm font-medium border border-gold/50 text-ink cursor-pointer">
             <Upload className="w-4 h-4" />
-            <span className="hidden md:inline ff-title">Importar</span>
+            <span className="hidden md:inline ff-title">Carregar</span>
             <input type="file" className="hidden" accept=".json" onChange={handleImport} />
           </label>
-          <button onClick={() => localStorage.setItem('dnd_character_sheet', JSON.stringify(char))} className="flex items-center gap-2 px-4 py-1.5 bg-ink hover:bg-ink-light rounded-sm transition-colors text-sm font-bold text-parchment border border-gold shadow-md">
+          <button onClick={handleExportJson} className="flex items-center gap-2 px-4 py-1.5 bg-ink hover:bg-ink-light rounded-sm transition-colors text-sm font-bold text-parchment border border-gold shadow-md">
             <Save className="w-4 h-4" />
             <span className="ff-title">Salvar</span>
           </button>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
+      <main ref={sheetRef} className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8 bg-parchment-light dark:bg-parchment transition-colors">
+        {/* Roll History Side Panel (Desktop) */}
+        <div className="fixed right-4 top-24 z-40 hidden xl:block w-64">
+          <div className="ff-panel p-4 max-h-[70vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-gold/30 pb-2 mb-4">
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4 text-gold" />
+                <span className="text-xs font-bold uppercase tracking-widest ff-title">Histórico</span>
+              </div>
+              {rollHistory.length > 0 && (
+                <button 
+                  onClick={() => setRollHistory([])} 
+                  className="p-1 text-ink/30 hover:text-accent-red transition-colors"
+                  title="Limpar Histórico"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            <div className="space-y-2">
+              {rollHistory.map(roll => (
+                <div key={roll.id} className="text-xs p-2 bg-ink/5 rounded-sm border border-gold/10 flex justify-between items-center">
+                  <span className="font-medium truncate mr-2">{roll.label}</span>
+                  <span className="font-bold text-accent-red ff-title">{roll.total}</span>
+                </div>
+              ))}
+              {rollHistory.length === 0 && <div className="text-center text-[10px] text-ink/30 italic py-4">Nenhuma rolagem</div>}
+            </div>
+          </div>
+        </div>
         {/* Character Header Info */}
         <section className="ff-panel p-6">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
@@ -240,7 +499,15 @@ export default function App() {
                 const mod = getMod(score);
                 return (
                   <motion.div key={ability} whileHover={{ scale: 1.02 }} className="ff-panel p-4 flex flex-col items-center relative overflow-hidden group">
-                    <span className="text-xs font-bold text-ink-light uppercase tracking-widest mb-1">{ABILITY_LABELS[ability]}</span>
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <span className="text-xs font-bold text-ink-light uppercase tracking-widest">{ABILITY_LABELS[ability]}</span>
+                      <button 
+                        onClick={() => handleRoll(`1d20${formatMod(mod)}`, ABILITY_LABELS[ability])}
+                        className="p-1 hover:bg-gold/20 rounded-full transition-colors text-gold"
+                      >
+                        <Dices className="w-3 h-3" />
+                      </button>
+                    </div>
                     <span className="text-4xl font-bold text-ink mb-1 ff-title">{formatMod(mod)}</span>
                     <div className="bg-parchment w-full rounded-sm py-1 flex items-center justify-center border border-gold/50 shadow-inner">
                       <input type="number" value={score} onChange={(e) => updateAbility(ability, parseInt(e.target.value) || 0)} className="bg-transparent w-10 text-center font-bold outline-none text-ink" />
@@ -263,9 +530,14 @@ export default function App() {
                   const isProficient = char.proficiencies.includes(ability);
                   const mod = getMod(char.abilities[ability]) + (isProficient ? profBonus : 0);
                   return (
-                    <div key={ability} onClick={() => toggleSavingThrow(ability)} className="flex items-center gap-3 px-3 py-2 rounded-sm hover:bg-ink/5 transition-colors cursor-pointer group">
-                      <div className={`w-3 h-3 rounded-full border-2 transition-all ${isProficient ? 'bg-accent-red border-accent-red shadow-[0_0_8px_rgba(139,37,0,0.5)]' : 'border-gold/50 group-hover:border-gold'}`} />
-                      <span className="text-sm font-bold text-ink w-8">{formatMod(mod)}</span>
+                    <div key={ability} className="flex items-center gap-3 px-3 py-2 rounded-sm hover:bg-ink/5 transition-colors group">
+                      <div onClick={() => toggleSavingThrow(ability)} className={`w-3 h-3 rounded-full border-2 transition-all cursor-pointer ${isProficient ? 'bg-accent-red border-accent-red shadow-[0_0_8px_rgba(139,37,0,0.5)]' : 'border-gold/50 group-hover:border-gold'}`} />
+                      <button 
+                        onClick={() => handleRoll(`1d20${formatMod(mod)}`, `Resistência: ${ABILITY_LABELS[ability]}`)}
+                        className="text-sm font-bold text-ink w-8 hover:text-accent-red transition-colors"
+                      >
+                        {formatMod(mod)}
+                      </button>
                       <span className="text-sm font-medium flex-1">{ABILITY_LABELS[ability]}</span>
                     </div>
                   );
@@ -295,14 +567,30 @@ export default function App() {
               <div className="p-2 space-y-1">
                 {char.skills.map((skill, idx) => {
                   const abilityMod = getMod(char.abilities[skill.ability]);
-                  const profMod = skill.proficient ? profBonus : 0;
+                  const profMod = skill.expertise ? profBonus * 2 : (skill.proficient ? profBonus : 0);
                   const miscMod = skill.miscBonus || 0;
                   const totalMod = abilityMod + profMod + miscMod;
                   
                   return (
                     <div key={skill.name} className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-ink/5 transition-colors group">
-                      <div onClick={() => toggleSkillProficiency(idx)} className={`w-3 h-3 rounded-full border-2 transition-all cursor-pointer ${skill.proficient ? 'bg-accent-red border-accent-red shadow-[0_0_8px_rgba(139,37,0,0.5)]' : 'border-gold/50 group-hover:border-gold'}`} />
-                      <div className="text-sm font-bold text-accent-red w-8 text-center">{formatMod(totalMod)}</div>
+                      <div 
+                        onClick={() => toggleSkillState(idx)} 
+                        className={`w-3 h-3 rounded-full border-2 transition-all cursor-pointer relative flex items-center justify-center ${
+                          skill.expertise 
+                            ? 'bg-accent-red border-accent-red shadow-[0_0_8px_rgba(139,37,0,0.5)]' 
+                            : skill.proficient 
+                              ? 'bg-accent-red/50 border-accent-red' 
+                              : 'border-gold/50 group-hover:border-gold'
+                        }`}
+                      >
+                        {skill.expertise && <div className="w-1 h-1 bg-white rounded-full" />}
+                      </div>
+                      <button 
+                        onClick={() => handleRoll(`1d20${formatMod(totalMod)}`, skill.name)}
+                        className="text-sm font-bold text-accent-red w-8 text-center hover:scale-110 transition-transform"
+                      >
+                        {formatMod(totalMod)}
+                      </button>
                       <div className="flex-1 flex flex-col">
                         <span className="text-xs font-medium">{skill.name}</span>
                         <span className="text-[8px] font-bold text-ink/40 uppercase">{skill.ability.substring(0, 3)}</span>
@@ -360,7 +648,7 @@ export default function App() {
                 </div>
               </div>
               <div className="h-4 bg-parchment rounded-sm overflow-hidden border border-gold/50 shadow-inner">
-                <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, (char.hpCurrent / char.hpMax) * 100)}%` }} className="h-full bg-gradient-to-r from-accent-red to-[#b33900] shadow-[0_0_10px_rgba(139,37,0,0.4)]" />
+                <motion.div initial={{ width: 0 }} animate={{ width: `${hpPercent}%` }} className="h-full bg-gradient-to-r from-accent-red to-[#b33900] shadow-[0_0_10px_rgba(139,37,0,0.4)]" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
@@ -442,13 +730,19 @@ export default function App() {
                             </div>
                             <div className="w-20">
                               <div className="text-[8px] uppercase font-bold text-ink/50 tracking-widest text-center mb-1">Bônus</div>
-                              <input type="text" value={attack.bonus} onChange={(e) => handleBonusChange(attack.id, e.target.value)} className="ff-input w-full text-center text-sm py-1" />
+                              <input type="number" value={attack.bonus} onChange={(e) => updateAttack(attack.id, 'bonus', parseInt(e.target.value) || 0)} className="ff-input w-full text-center text-sm py-1" />
                             </div>
                             <div className="w-24">
                               <div className="text-[8px] uppercase font-bold text-ink/50 tracking-widest text-center mb-1">Dano/Tipo</div>
-                              <input type="text" value={attack.damage} onChange={(e) => handleDamageChange(attack.id, e.target.value)} className="ff-input w-full text-center text-sm py-1" />
+                              <input type="text" value={attack.damage} onChange={(e) => updateAttack(attack.id, 'damage', e.target.value)} className="ff-input w-full text-center text-sm py-1" />
                             </div>
-                            <div className="w-8 flex justify-end">
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handleRoll([`1d20${formatMod(attack.bonus)}`, attack.damage], attack.name)}
+                                className="bg-accent-red text-white px-3 py-1 rounded-sm text-xs font-bold uppercase hover:bg-accent-red/80 transition-all flex items-center gap-1"
+                              >
+                                <Sword className="w-3 h-3" /> Rolar
+                              </button>
                               <button onClick={() => removeAttack(attack.id)} className="text-ink/30 hover:text-accent-red transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
                             </div>
                           </div>
@@ -460,6 +754,19 @@ export default function App() {
 
                   {activeTab === 'equipment' && (
                     <motion.div key="equipment" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
+                      {/* Weight Display */}
+                      <div className={`ff-panel p-4 flex justify-between items-center ${isOverweight ? 'border-accent-red bg-accent-red/5' : ''}`}>
+                        <div className="flex items-center gap-2">
+                          <Backpack className={`w-5 h-5 ${isOverweight ? 'text-accent-red' : 'text-gold'}`} />
+                          <span className="text-sm font-bold uppercase tracking-widest ff-title">Peso de Carga</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-lg font-bold ${isOverweight ? 'text-accent-red' : 'text-ink'}`}>{totalWeight.toFixed(1)}</span>
+                          <span className="text-ink/30">/</span>
+                          <span className="text-sm font-medium text-ink/50">{weightLimit} kg</span>
+                        </div>
+                      </div>
+                      
                       {/* Coins */}
                       <div className="bg-parchment/50 p-4 rounded-sm border border-gold/30 shadow-inner">
                         <div className="text-[10px] font-bold uppercase text-ink-light mb-3 tracking-widest text-center ff-title">Moedas</div>
@@ -546,6 +853,39 @@ export default function App() {
                         </div>
                       </div>
 
+                      {/* Spell Filters */}
+                      <div className="space-y-4">
+                        <div className="flex gap-2">
+                          <div className="flex-1 relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink/30" />
+                            <input 
+                              type="text" 
+                              value={spellSearch} 
+                              onChange={(e) => setSpellSearch(e.target.value)} 
+                              placeholder="Buscar magia..." 
+                              className="ff-input w-full pl-10 py-2"
+                            />
+                          </div>
+                          <button 
+                            onClick={() => setSpellFilter(prev => ({ ...prev, prepared: prev.prepared === 'all' ? true : (prev.prepared === true ? false : 'all') }))}
+                            className={`px-3 py-2 rounded-sm border transition-all text-xs font-bold uppercase ${spellFilter.prepared === 'all' ? 'border-gold/30 text-ink/30' : 'border-accent-red text-accent-red bg-accent-red/5'}`}
+                          >
+                            {spellFilter.prepared === 'all' ? 'Todas' : (spellFilter.prepared ? 'Preparadas' : 'Não Prep.')}
+                          </button>
+                        </div>
+                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                          {['all', 0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(lvl => (
+                            <button 
+                              key={lvl}
+                              onClick={() => setSpellFilter(prev => ({ ...prev, level: lvl as any }))}
+                              className={`px-3 py-1 rounded-sm border text-[10px] font-bold whitespace-nowrap transition-all ${spellFilter.level === lvl ? 'bg-ink text-parchment border-ink' : 'border-gold/30 text-ink/50 hover:border-gold'}`}
+                            >
+                              {lvl === 'all' ? 'Todos Níveis' : `Nível ${lvl}`}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
                       {/* Spell Slots */}
                       <div className="grid grid-cols-3 sm:grid-cols-9 gap-2">
                         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(lvl => (
@@ -564,7 +904,7 @@ export default function App() {
                       <div className="space-y-6">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <h3 className="text-sm font-bold uppercase tracking-widest text-ink ff-title">Magias Conhecidas</h3>
+                            <h3 className="text-sm font-bold uppercase tracking-widest text-ink ff-title">Magias Conhecidas ({filteredSpells.length})</h3>
                             <Tooltip text="Lista de magias conhecidas. Marque a bolinha para preparar a magia.">
                               <Info className="w-4 h-4 text-ink/30 cursor-help" />
                             </Tooltip>
@@ -573,25 +913,42 @@ export default function App() {
                         </div>
 
                         <div className="space-y-4">
-                          {char.spells.map((spell) => (
+                          {filteredSpells.map((spell) => (
                             <div key={spell.id} className="bg-parchment/50 rounded-sm border border-gold/30 overflow-hidden group shadow-inner">
                               <div className="p-4 grid grid-cols-12 gap-4 items-center">
                                 <div className="col-span-1 flex justify-center">
                                   <div onClick={() => updateSpell(spell.id, 'prepared', !spell.prepared)} className={`w-4 h-4 rounded-full border-2 cursor-pointer transition-all ${spell.prepared ? 'bg-accent-red border-accent-red shadow-[0_0_8px_rgba(139,37,0,0.5)]' : 'border-gold/50'}`} />
                                 </div>
-                                <div className="col-span-5">
+                                <div className="col-span-11 sm:col-span-4">
                                   <input type="text" value={spell.name} onChange={(e) => updateSpell(spell.id, 'name', e.target.value)} className="bg-transparent w-full font-bold outline-none focus:text-accent-red text-ink border-b border-transparent focus:border-gold/30" />
                                   <div className="text-[10px] uppercase font-bold text-ink/40">Nome da Magia</div>
                                 </div>
-                                <div className="col-span-2">
+                                <div className="col-span-4 sm:col-span-1">
                                   <input type="number" value={spell.level} onChange={(e) => updateSpell(spell.id, 'level', parseInt(e.target.value) || 0)} className="bg-transparent w-full font-bold text-center outline-none text-ink border-b border-transparent focus:border-gold/30" />
                                   <div className="text-[10px] uppercase font-bold text-ink/40 text-center">Nível</div>
                                 </div>
-                                <div className="col-span-3">
+                                <div className="col-span-6 sm:col-span-2">
                                   <input type="text" value={spell.school} onChange={(e) => updateSpell(spell.id, 'school', e.target.value)} className="bg-transparent w-full font-bold text-center outline-none text-ink border-b border-transparent focus:border-gold/30" />
                                   <div className="text-[10px] uppercase font-bold text-ink/40 text-center">Escola</div>
                                 </div>
-                                <div className="col-span-1 flex justify-end">
+                                <div className="col-span-10 sm:col-span-3">
+                                  <div className="flex gap-1">
+                                    <input type="text" value={spell.damage || ''} onChange={(e) => updateSpell(spell.id, 'damage', e.target.value)} placeholder="Dano" className="bg-transparent flex-1 font-bold text-center outline-none text-ink border-b border-transparent focus:border-gold/30" />
+                                    <button 
+                                      onClick={() => {
+                                        const attackBonus = profBonus + getMod(char.abilities[char.spellcastingAbility]);
+                                        const formulas = [`1d20${formatMod(attackBonus)}`];
+                                        if (spell.damage) formulas.push(spell.damage);
+                                        handleRoll(formulas, spell.name);
+                                      }}
+                                      className="p-1 text-accent-red hover:scale-110 transition-transform"
+                                    >
+                                      <Zap className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                  <div className="text-[10px] uppercase font-bold text-ink/40 text-center">Ataque/Dano</div>
+                                </div>
+                                <div className="col-span-2 sm:col-span-1 flex justify-end">
                                   <button onClick={() => removeSpell(spell.id)} className="text-ink/30 hover:text-accent-red transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
                                 </div>
                               </div>
@@ -641,10 +998,17 @@ export default function App() {
                           <textarea value={char.appearance} onChange={(e) => updateField('appearance', e.target.value)} className="ff-textarea w-full h-40 p-3 rounded-sm resize-none text-sm" />
                         </div>
                         <div className="space-y-2">
-                          <div className="text-[10px] font-bold uppercase text-ink-light px-1 ff-title">Retrato do Personagem (URL da Imagem)</div>
-                          <div className="flex flex-col gap-2 h-40">
-                            <input type="text" value={char.portrait} onChange={(e) => updateField('portrait', e.target.value)} placeholder="https://exemplo.com/imagem.png" className="ff-input w-full px-2 py-1 text-sm" />
-                            <div className="flex-1 bg-parchment/50 border border-gold/30 rounded-sm flex items-center justify-center overflow-hidden shadow-inner relative">
+                          <div className="text-[10px] font-bold uppercase text-ink-light px-1 ff-title">Retrato do Personagem</div>
+                          <div className="flex flex-col gap-2 h-auto sm:h-40">
+                            <div className="flex gap-2">
+                              <input type="text" value={char.portrait.startsWith('data:') ? '' : char.portrait} onChange={(e) => updateField('portrait', e.target.value)} placeholder="URL da Imagem..." className="ff-input flex-1 px-2 py-1 text-sm" />
+                              <label className="bg-ink text-parchment px-3 py-1 rounded-sm text-xs font-bold cursor-pointer hover:bg-ink-light transition-colors flex items-center gap-2">
+                                <Upload className="w-3 h-3" />
+                                <span>Upload</span>
+                                <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                              </label>
+                            </div>
+                            <div className="flex-1 bg-parchment/50 border border-gold/30 rounded-sm flex items-center justify-center overflow-hidden shadow-inner relative min-h-[150px]">
                               {char.portrait ? (
                                 <img src={char.portrait} alt="Retrato" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                               ) : (
@@ -652,6 +1016,11 @@ export default function App() {
                                   <User className="w-8 h-8" />
                                   <span className="text-xs font-bold uppercase tracking-widest">Sem Imagem</span>
                                 </div>
+                              )}
+                              {char.portrait && (
+                                <button onClick={() => updateField('portrait', '')} className="absolute top-1 right-1 bg-accent-red text-white p-1 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <X className="w-3 h-3" />
+                                </button>
                               )}
                             </div>
                           </div>
@@ -731,9 +1100,136 @@ export default function App() {
         </div>
       </main>
 
-      <footer className="mt-12 py-8 border-t border-gold/30 text-center text-ink/40 text-xs font-medium">
+      {/* Mobile Bottom Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-parchment-light/95 dark:bg-parchment/95 backdrop-blur-md border-t border-gold/30 lg:hidden flex justify-around items-center py-2 px-1 shadow-[0_-4px_10px_rgba(0,0,0,0.1)]">
+        {[
+          { id: 'combat', label: 'Combate', icon: Sword },
+          { id: 'spells', label: 'Magias', icon: ScrollText },
+          { id: 'equipment', label: 'Itens', icon: Backpack },
+          { id: 'details', label: 'Bio', icon: BookOpen },
+          { id: 'features', label: 'Traços', icon: Trophy }
+        ].map((tab) => (
+          <button 
+            key={tab.id} 
+            onClick={() => setActiveTab(tab.id as any)} 
+            className={`flex flex-col items-center gap-1 transition-all flex-1 ${activeTab === tab.id ? 'text-accent-red' : 'text-ink-light'}`}
+          >
+            <tab.icon className="w-5 h-5" />
+            <span className="text-[8px] font-bold uppercase tracking-tighter">{tab.label}</span>
+          </button>
+        ))}
+        <button 
+          onClick={() => {
+            const historyStr = rollHistory.map(r => `🎲 ${r.label}: ${r.total}`).join('\n');
+            alert(historyStr || 'Nenhuma rolagem no histórico');
+          }}
+          className="flex flex-col items-center gap-1 text-ink-light flex-1"
+        >
+          <History className="w-5 h-5" />
+          <span className="text-[8px] font-bold uppercase tracking-tighter">Log</span>
+        </button>
+      </div>
+
+      <footer className="mt-12 py-8 border-t border-gold/30 text-center text-ink/40 text-xs font-medium pb-24 lg:pb-8">
         <p className="ff-title">Inspirado no D&D Beyond & Final Fantasy XII • Criado para RPGistas</p>
       </footer>
+
+      {/* Hidden Full Sheet for Export */}
+      <div className="fixed left-[-9999px] top-0">
+        <div ref={exportRef} className="w-[1200px] p-12 bg-parchment-light space-y-12">
+          <div className="text-center border-b-4 border-gold pb-6">
+            <h1 className="text-6xl font-bold ff-title text-ink">{char.name || 'Personagem Sem Nome'}</h1>
+            <p className="text-xl text-ink-light uppercase tracking-[0.3em] mt-2">{char.classLevel} • {char.race}</p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-8">
+            {/* Column 1: Stats & Skills */}
+            <div className="space-y-8">
+              <div className="grid grid-cols-2 gap-4">
+                {(Object.keys(char.abilities) as Ability[]).map(a => (
+                  <div key={a} className="ff-panel p-4 text-center">
+                    <div className="text-xs font-bold uppercase text-ink-light">{ABILITY_LABELS[a]}</div>
+                    <div className="text-4xl font-bold ff-title">{formatMod(getMod(char.abilities[a]))}</div>
+                    <div className="text-sm font-bold text-ink/50">Score: {char.abilities[a]}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="ff-panel p-6">
+                <h3 className="ff-title text-lg border-b border-gold mb-4">Perícias</h3>
+                <div className="space-y-2">
+                  {char.skills.map(s => (
+                    <div key={s.name} className="flex justify-between text-sm">
+                      <span className={s.proficient ? 'font-bold text-accent-red' : ''}>{s.name}</span>
+                      <span className="font-mono">{formatMod(getMod(char.abilities[s.ability]) + (s.proficient ? profBonus : 0) + (s.miscBonus || 0))}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Column 2: Combat & Portrait */}
+            <div className="space-y-8">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="ff-panel p-4 text-center">
+                  <div className="text-xs font-bold uppercase">AC</div>
+                  <div className="text-3xl font-bold">{char.ac}</div>
+                </div>
+                <div className="ff-panel p-4 text-center">
+                  <div className="text-xs font-bold uppercase">HP</div>
+                  <div className="text-3xl font-bold">{char.hpCurrent}/{char.hpMax}</div>
+                </div>
+                <div className="ff-panel p-4 text-center">
+                  <div className="text-xs font-bold uppercase">SPD</div>
+                  <div className="text-3xl font-bold">{char.speed}</div>
+                </div>
+              </div>
+              <div className="ff-panel aspect-square overflow-hidden">
+                {char.portrait ? (
+                  <img src={char.portrait} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-ink/20"><User size={100} /></div>
+                )}
+              </div>
+              <div className="ff-panel p-6">
+                <h3 className="ff-title text-lg border-b border-gold mb-4">Ataques</h3>
+                <div className="space-y-4">
+                  {char.attacks.map(a => (
+                    <div key={a.id} className="border-b border-gold/20 pb-2">
+                      <div className="font-bold">{a.name}</div>
+                      <div className="text-sm text-accent-red">{a.bonus} to hit • {a.damage} damage</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Column 3: Features & Equipment */}
+            <div className="space-y-8">
+              <div className="ff-panel p-6">
+                <h3 className="ff-title text-lg border-b border-gold mb-4">Personalidade</h3>
+                <div className="space-y-4 text-sm italic">
+                  <div><span className="font-bold uppercase text-[10px] not-italic">Traços:</span> {char.personality.traits}</div>
+                  <div><span className="font-bold uppercase text-[10px] not-italic">Ideais:</span> {char.personality.ideals}</div>
+                  <div><span className="font-bold uppercase text-[10px] not-italic">Ligações:</span> {char.personality.bonds}</div>
+                  <div><span className="font-bold uppercase text-[10px] not-italic">Defeitos:</span> {char.personality.flaws}</div>
+                </div>
+              </div>
+              <div className="ff-panel p-6">
+                <h3 className="ff-title text-lg border-b border-gold mb-4">Habilidades</h3>
+                <div className="text-sm whitespace-pre-wrap">{char.classFeatures}</div>
+              </div>
+              <div className="ff-panel p-6">
+                <h3 className="ff-title text-lg border-b border-gold mb-4">Equipamento</h3>
+                <div className="text-sm whitespace-pre-wrap">{char.equipment}</div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="text-center text-ink/30 text-xs ff-title pt-12">
+            Gerado via D&D 5e Sheet App • {new Date().toLocaleDateString()}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

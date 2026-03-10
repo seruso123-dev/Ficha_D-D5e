@@ -1,0 +1,17 @@
+{
+  "name": "D&D 5e Character Sheet",
+  "short_name": "D&D Sheet",
+  "description": "A professional D&D 5e character sheet with dice rolling and export features.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#dcd3b6",
+  "theme_color": "#8b2500",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3043/3043888.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

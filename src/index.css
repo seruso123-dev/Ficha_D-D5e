@@ -14,6 +14,16 @@
   --color-accent-red: #8b2500;
 }
 
+.dark {
+  --color-parchment: #0f0f0f;
+  --color-parchment-light: #1a1a1a;
+  --color-ink: #f0ead6;
+  --color-ink-light: #dcd3b6;
+  --color-gold: #c5a059;
+  --color-gold-light: #e0c9a0;
+  --color-accent-red: #ff5e1a;
+}
+
 body {
   background-color: var(--color-parchment);
   background-image: 
@@ -22,6 +32,13 @@ body {
   color: var(--color-ink);
   font-family: "Cormorant Garamond", serif;
   background-attachment: fixed;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.dark body {
+  background-image: 
+    radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.8) 100%),
+    url("https://www.transparenttextures.com/patterns/dark-matter.png");
 }
 
 .ff-panel {
@@ -35,6 +52,14 @@ body {
   position: relative;
   backdrop-filter: blur(4px);
   border-radius: 4px;
+}
+
+.dark .ff-panel {
+  background-color: rgba(26, 26, 26, 0.95);
+  box-shadow: 
+    inset 0 0 30px rgba(166, 138, 86, 0.1), 
+    0 6px 15px rgba(0, 0, 0, 0.6),
+    0 0 0 1px var(--color-ink);
 }
 
 .ff-panel::before {
@@ -65,6 +90,9 @@ body {
   color: rgba(92, 71, 56, 0.4);
   font-weight: 400;
 }
+.dark .ff-input::placeholder {
+  color: rgba(240, 234, 214, 0.3);
+}
 
 .ff-textarea {
   background: rgba(44, 30, 22, 0.03);
@@ -77,8 +105,15 @@ body {
   border-color: var(--color-accent-red);
   background: rgba(44, 30, 22, 0.05);
 }
+.dark .ff-textarea {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(166, 138, 86, 0.4);
+}
 .ff-textarea::placeholder {
   color: rgba(92, 71, 56, 0.4);
+}
+.dark .ff-textarea::placeholder {
+  color: rgba(240, 234, 214, 0.3);
 }
 
 @layer base {

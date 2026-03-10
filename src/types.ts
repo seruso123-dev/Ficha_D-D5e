@@ -42,6 +42,7 @@ export interface SpellSlots {
 
 export interface CharacterData {
   name: string;
+  playerName: string;
   classLevel: string;
   race: string;
   background: string;
@@ -71,9 +72,17 @@ export interface CharacterData {
   attacks: Attack[];
   
   inventory: InventoryItem[];
+  coins: {
+    cp: number;
+    sp: number;
+    ep: number;
+    gp: number;
+    pp: number;
+  };
   spells: Spell[];
   spellSlots: Record<number, SpellSlots>;
   spellcastingAbility: Ability;
+  spellcastingClass: string;
   
   equipment: string;
   features: string;
@@ -85,10 +94,25 @@ export interface CharacterData {
     bonds: string;
     flaws: string;
   };
+
+  // Page 2 Details
+  age: string;
+  height: string;
+  weight: string;
+  eyes: string;
+  skin: string;
+  hair: string;
+  appearance: string;
+  portrait: string;
+  allies: string;
+  backstory: string;
+  additionalFeatures: string;
+  treasure: string;
 }
 
 export const INITIAL_DATA: CharacterData = {
   name: '',
+  playerName: '',
   classLevel: '',
   race: '',
   background: '',
@@ -138,6 +162,7 @@ export const INITIAL_DATA: CharacterData = {
   ],
   attacks: [],
   inventory: [],
+  coins: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
   spells: [],
   spellSlots: {
     1: { total: 0, used: 0 },
@@ -151,6 +176,7 @@ export const INITIAL_DATA: CharacterData = {
     9: { total: 0, used: 0 },
   },
   spellcastingAbility: 'INT',
+  spellcastingClass: '',
   equipment: '',
   features: '',
   languages: '',
@@ -159,5 +185,17 @@ export const INITIAL_DATA: CharacterData = {
     ideals: '',
     bonds: '',
     flaws: ''
-  }
+  },
+  age: '',
+  height: '',
+  weight: '',
+  eyes: '',
+  skin: '',
+  hair: '',
+  appearance: '',
+  portrait: '',
+  allies: '',
+  backstory: '',
+  additionalFeatures: '',
+  treasure: ''
 };

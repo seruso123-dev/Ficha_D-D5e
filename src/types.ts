@@ -86,6 +86,7 @@ export interface CharacterData {
   
   equipment: string;
   features: string;
+  classFeatures: string;
   languages: string;
   
   personality: {
@@ -179,6 +180,7 @@ export const INITIAL_DATA: CharacterData = {
   spellcastingClass: '',
   equipment: '',
   features: '',
+  classFeatures: '',
   languages: '',
   personality: {
     traits: '',

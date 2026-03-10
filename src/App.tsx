@@ -14,6 +14,13 @@ const ABILITY_LABELS: Record<Ability, string> = {
 const getMod = (score: number) => Math.floor((score - 10) / 2);
 const formatMod = (mod: number) => (mod >= 0 ? `+${mod}` : mod.toString());
 
+const Tooltip = ({ children, text }: { children: React.ReactNode, text: string }) => (
+  <div className="ff-tooltip inline-flex items-center">
+    {children}
+    <span className="tooltip-text">{text}</span>
+  </div>
+);
+
 export default function App() {
   const [char, setChar] = useState<CharacterData>(() => {
     const saved = localStorage.getItem('dnd_character_sheet');
@@ -139,6 +146,16 @@ export default function App() {
     updateField('proficiencies', newProficiencies);
   };
 
+  const handleBonusChange = (id: string, value: string) => {
+    const valid = value.replace(/[^0-9+\-]/g, '');
+    updateAttack(id, 'bonus', valid);
+  };
+
+  const handleDamageChange = (id: string, value: string) => {
+    const valid = value.replace(/[^0-9dD+\-\s]/g, '');
+    updateAttack(id, 'damage', valid);
+  };
+
   return (
     <div className="min-h-screen text-ink font-sans selection:bg-gold/30 pb-12">
       {/* Top Navigation Bar */}
@@ -237,6 +254,9 @@ export default function App() {
             <div className="ff-panel overflow-hidden">
               <div className="bg-ink/5 px-4 py-3 flex items-center justify-between border-b border-gold/30">
                 <span className="text-xs font-bold uppercase tracking-widest text-ink ff-title">Testes de Resistência</span>
+                <Tooltip text="Testes para resistir a efeitos nocivos. Marque a bolinha para adicionar sua proficiência.">
+                  <Info className="w-4 h-4 text-ink/30 cursor-help" />
+                </Tooltip>
               </div>
               <div className="p-2 space-y-1">
                 {(Object.keys(char.abilities) as Ability[]).map((ability) => {
@@ -268,7 +288,9 @@ export default function App() {
             <div className="ff-panel overflow-hidden">
               <div className="bg-ink/5 px-4 py-3 flex items-center justify-between border-b border-gold/30">
                 <span className="text-xs font-bold uppercase tracking-widest text-ink ff-title">Perícias</span>
-                <Info className="w-4 h-4 text-ink/30" />
+                <Tooltip text="Perícias representam o treinamento do personagem em tarefas específicas.">
+                  <Info className="w-4 h-4 text-ink/30 cursor-help" />
+                </Tooltip>
               </div>
               <div className="p-2 space-y-1">
                 {char.skills.map((skill, idx) => {
@@ -327,6 +349,9 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   <Heart className="w-5 h-5 text-accent-red fill-accent-red/20" />
                   <span className="text-sm font-bold uppercase tracking-widest text-ink ff-title">Pontos de Vida</span>
+                  <Tooltip text="Seus pontos de vida atuais e máximos. Representam a vitalidade do personagem.">
+                    <Info className="w-4 h-4 text-ink/30 cursor-help" />
+                  </Tooltip>
                 </div>
                 <div className="flex items-center gap-2 text-sm font-bold">
                   <input type="number" value={char.hpCurrent} onChange={(e) => updateField('hpCurrent', parseInt(e.target.value) || 0)} className="bg-parchment w-16 text-center py-1 rounded-sm border border-gold/50 outline-none focus:border-accent-red" />
@@ -400,25 +425,30 @@ export default function App() {
                   {activeTab === 'combat' && (
                     <motion.div key="combat" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-bold uppercase tracking-widest text-ink ff-title">Ataques e Conjurações</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-bold uppercase tracking-widest text-ink ff-title">Ataques e Conjurações</h3>
+                          <Tooltip text="Armas e magias de ataque. Adicione o bônus de acerto e o dano rolado.">
+                            <Info className="w-4 h-4 text-ink/30 cursor-help" />
+                          </Tooltip>
+                        </div>
                         <button onClick={addAttack} className="p-1.5 bg-ink text-parchment rounded-sm hover:bg-ink-light transition-colors border border-gold"><Plus className="w-4 h-4" /></button>
                       </div>
                       <div className="space-y-3">
                         {char.attacks.map((attack) => (
-                          <div key={attack.id} className="bg-parchment/50 p-4 rounded-sm border border-gold/30 grid grid-cols-12 gap-4 items-center group shadow-inner">
-                            <div className="col-span-5">
-                              <input type="text" value={attack.name} onChange={(e) => updateAttack(attack.id, 'name', e.target.value)} className="bg-transparent w-full font-bold outline-none focus:text-accent-red text-ink border-b border-transparent focus:border-gold/30" />
-                              <div className="text-[10px] uppercase font-bold text-ink/40">Nome</div>
+                          <div key={attack.id} className="bg-parchment/50 p-3 rounded-sm border border-gold/30 flex flex-wrap sm:flex-nowrap items-center gap-3 group shadow-inner">
+                            <div className="flex-1 min-w-[120px]">
+                              <div className="text-[8px] uppercase font-bold text-ink/50 tracking-widest mb-1">Nome do Ataque</div>
+                              <input type="text" value={attack.name} onChange={(e) => updateAttack(attack.id, 'name', e.target.value)} className="ff-input w-full text-sm py-1" />
                             </div>
-                            <div className="col-span-3">
-                              <input type="text" value={attack.bonus} onChange={(e) => updateAttack(attack.id, 'bonus', e.target.value)} className="bg-transparent w-full font-bold text-center outline-none text-ink border-b border-transparent focus:border-gold/30" />
-                              <div className="text-[10px] uppercase font-bold text-ink/40 text-center">Bônus</div>
+                            <div className="w-20">
+                              <div className="text-[8px] uppercase font-bold text-ink/50 tracking-widest text-center mb-1">Bônus</div>
+                              <input type="text" value={attack.bonus} onChange={(e) => handleBonusChange(attack.id, e.target.value)} className="ff-input w-full text-center text-sm py-1" />
                             </div>
-                            <div className="col-span-3">
-                              <input type="text" value={attack.damage} onChange={(e) => updateAttack(attack.id, 'damage', e.target.value)} className="bg-transparent w-full font-bold text-center outline-none text-ink border-b border-transparent focus:border-gold/30" />
-                              <div className="text-[10px] uppercase font-bold text-ink/40 text-center">Dano</div>
+                            <div className="w-24">
+                              <div className="text-[8px] uppercase font-bold text-ink/50 tracking-widest text-center mb-1">Dano/Tipo</div>
+                              <input type="text" value={attack.damage} onChange={(e) => handleDamageChange(attack.id, e.target.value)} className="ff-input w-full text-center text-sm py-1" />
                             </div>
-                            <div className="col-span-1 flex justify-end">
+                            <div className="w-8 flex justify-end">
                               <button onClick={() => removeAttack(attack.id)} className="text-ink/30 hover:text-accent-red transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
                             </div>
                           </div>
@@ -450,31 +480,36 @@ export default function App() {
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-bold uppercase tracking-widest text-ink ff-title">Inventário</h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-bold uppercase tracking-widest text-ink ff-title">Inventário</h3>
+                          <Tooltip text="Gerencie os itens que carrega em sua mochila.">
+                            <Info className="w-4 h-4 text-ink/30 cursor-help" />
+                          </Tooltip>
+                        </div>
                         <button onClick={addInventoryItem} className="p-1.5 bg-ink text-parchment rounded-sm hover:bg-ink-light transition-colors border border-gold"><Plus className="w-4 h-4" /></button>
                       </div>
                       
                       <div className="space-y-3">
                         {char.inventory.map((item) => (
                           <div key={item.id} className="bg-parchment/50 p-4 rounded-sm border border-gold/30 space-y-3 group shadow-inner">
-                            <div className="grid grid-cols-12 gap-4 items-center">
-                              <div className="col-span-6">
-                                <input type="text" value={item.name} onChange={(e) => updateInventoryItem(item.id, 'name', e.target.value)} className="bg-transparent w-full font-bold outline-none focus:text-accent-red text-ink border-b border-transparent focus:border-gold/30" />
-                                <div className="text-[10px] uppercase font-bold text-ink/40">Nome do Item</div>
+                            <div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
+                              <div className="flex-1 min-w-[120px]">
+                                <div className="text-[8px] uppercase font-bold text-ink/50 tracking-widest mb-1">Nome do Item</div>
+                                <input type="text" value={item.name} onChange={(e) => updateInventoryItem(item.id, 'name', e.target.value)} className="ff-input w-full text-sm py-1" />
                               </div>
-                              <div className="col-span-2">
-                                <input type="number" value={item.quantity} onChange={(e) => updateInventoryItem(item.id, 'quantity', parseInt(e.target.value) || 0)} className="bg-transparent w-full font-bold text-center outline-none text-ink border-b border-transparent focus:border-gold/30" />
-                                <div className="text-[10px] uppercase font-bold text-ink/40 text-center">Qtd</div>
+                              <div className="w-16">
+                                <div className="text-[8px] uppercase font-bold text-ink/50 tracking-widest text-center mb-1">Qtd</div>
+                                <input type="number" value={item.quantity} onChange={(e) => updateInventoryItem(item.id, 'quantity', parseInt(e.target.value) || 0)} className="ff-input w-full text-center text-sm py-1" />
                               </div>
-                              <div className="col-span-3">
-                                <input type="text" value={item.weight} onChange={(e) => updateInventoryItem(item.id, 'weight', e.target.value)} className="bg-transparent w-full font-bold text-center outline-none text-ink border-b border-transparent focus:border-gold/30" />
-                                <div className="text-[10px] uppercase font-bold text-ink/40 text-center">Peso</div>
+                              <div className="w-20">
+                                <div className="text-[8px] uppercase font-bold text-ink/50 tracking-widest text-center mb-1">Peso</div>
+                                <input type="text" value={item.weight} onChange={(e) => updateInventoryItem(item.id, 'weight', e.target.value)} className="ff-input w-full text-center text-sm py-1" />
                               </div>
-                              <div className="col-span-1 flex justify-end">
+                              <div className="w-8 flex justify-end">
                                 <button onClick={() => removeInventoryItem(item.id)} className="text-ink/30 hover:text-accent-red transition-colors opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
                               </div>
                             </div>
-                            <textarea value={item.description} onChange={(e) => updateInventoryItem(item.id, 'description', e.target.value)} placeholder="Descrição do item..." className="ff-textarea w-full p-2 rounded-sm text-xs h-16 resize-none" />
+                            <textarea value={item.description} onChange={(e) => updateInventoryItem(item.id, 'description', e.target.value)} placeholder="Descrição do item..." className="ff-textarea w-full p-2 rounded-sm text-xs h-16 resize-none mt-2" />
                           </div>
                         ))}
                         {char.inventory.length === 0 && <div className="text-center py-12 border-2 border-dashed border-gold/30 rounded-sm text-ink/40 italic">Inventário vazio</div>}
@@ -528,7 +563,12 @@ export default function App() {
                       {/* Spell List */}
                       <div className="space-y-6">
                         <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-bold uppercase tracking-widest text-ink ff-title">Magias Conhecidas</h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-bold uppercase tracking-widest text-ink ff-title">Magias Conhecidas</h3>
+                            <Tooltip text="Lista de magias conhecidas. Marque a bolinha para preparar a magia.">
+                              <Info className="w-4 h-4 text-ink/30 cursor-help" />
+                            </Tooltip>
+                          </div>
                           <button onClick={addSpell} className="p-1.5 bg-ink text-parchment rounded-sm hover:bg-ink-light transition-colors border border-gold"><Plus className="w-4 h-4" /></button>
                         </div>
 
@@ -588,9 +628,9 @@ export default function App() {
                           { label: 'Idade', field: 'age' }, { label: 'Altura', field: 'height' }, { label: 'Peso', field: 'weight' },
                           { label: 'Olhos', field: 'eyes' }, { label: 'Pele', field: 'skin' }, { label: 'Cabelos', field: 'hair' }
                         ].map(item => (
-                          <div key={item.field}>
-                            <input type="text" value={(char as any)[item.field]} onChange={(e) => updateField(item.field as any, e.target.value)} className="ff-input w-full px-1 py-1 text-center" />
-                            <div className="text-[10px] uppercase font-bold text-ink-light text-center mt-1">{item.label}</div>
+                          <div key={item.field} className="bg-parchment/50 p-2 rounded-sm border border-gold/30 flex flex-col items-center justify-center shadow-inner">
+                            <input type="text" value={(char as any)[item.field]} onChange={(e) => updateField(item.field as any, e.target.value)} className="bg-transparent w-full text-center font-bold text-ink outline-none border-b border-gold/30 focus:border-accent-red text-sm" />
+                            <div className="text-[8px] uppercase font-bold text-ink-light text-center mt-1 tracking-widest">{item.label}</div>
                           </div>
                         ))}
                       </div>
@@ -645,8 +685,12 @@ export default function App() {
                   {activeTab === 'features' && (
                     <motion.div key="features" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
                       <div className="space-y-2">
-                        <div className="text-[10px] font-bold uppercase text-ink-light px-1 ff-title">Características e Habilidades (Classe/Raça)</div>
-                        <textarea value={char.features} onChange={(e) => updateField('features', e.target.value)} placeholder="Habilidades de classe, talentos..." className="ff-textarea w-full h-80 p-4 rounded-sm resize-none font-medium text-sm" />
+                        <div className="text-[10px] font-bold uppercase text-ink-light px-1 ff-title">Habilidades de Classe</div>
+                        <textarea value={char.classFeatures} onChange={(e) => updateField('classFeatures', e.target.value)} placeholder="Habilidades recebidas pela sua classe..." className="ff-textarea w-full h-40 p-4 rounded-sm resize-none font-medium text-sm" />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-[10px] font-bold uppercase text-ink-light px-1 ff-title">Traços Raciais e Outras Habilidades</div>
+                        <textarea value={char.features} onChange={(e) => updateField('features', e.target.value)} placeholder="Habilidades de raça, talentos..." className="ff-textarea w-full h-40 p-4 rounded-sm resize-none font-medium text-sm" />
                       </div>
                     </motion.div>
                   )}

@@ -112,6 +112,16 @@ export interface CharacterData {
   treasure: string;
 }
 
+export type Theme = 'medieval' | 'samurai' | 'forest' | 'divine' | 'desert';
+
+export const THEMES: { id: Theme; label: string }[] = [
+  { id: 'medieval', label: 'Medieval' },
+  { id: 'samurai', label: 'Samurai' },
+  { id: 'forest', label: 'Floresta Mágica' },
+  { id: 'divine', label: 'Divino' },
+  { id: 'desert', label: 'Deserto' }
+];
+
 export const INITIAL_DATA: CharacterData = {
   name: '',
   playerName: '',

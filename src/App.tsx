@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toJpeg } from 'html-to-image';
-import { CharacterData, INITIAL_DATA, Ability, Skill, Attack, InventoryItem, Spell } from './types';
+import { CharacterData, INITIAL_DATA, Ability, Skill, Attack, InventoryItem, Spell, Theme, THEMES } from './types';
 import { formatMod } from './utils/format';
 import { SpellItem } from './components/spells/SpellItem';
 
@@ -82,6 +82,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'combat' | 'spells' | 'equipment' | 'features' | 'details'>('combat');
   const [isExporting, setIsExporting] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('dnd_dark_mode') === 'true');
+  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('dnd_theme') as Theme) || 'medieval');
   const [spellSearch, setSpellSearch] = useState('');
   const [spellFilter, setSpellFilter] = useState<{level: number | 'all', prepared: boolean | 'all', school: string | 'all'}>({
     level: 'all',
@@ -104,6 +105,10 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [darkMode]);
+
+  useEffect(() => {
+    localStorage.setItem('dnd_theme', theme);
+  }, [theme]);
 
   const totalWeight = useMemo(() => {
     return char.inventory.reduce((sum, item) => sum + (parseFloat(item.weight) || 0) * item.quantity, 0);
@@ -314,7 +319,7 @@ export default function App() {
   const hpPercent = char.hpMax > 0 ? Math.min(100, (char.hpCurrent / char.hpMax) * 100) : 0;
 
   return (
-    <div className="min-h-screen text-ink font-sans selection:bg-gold/30 pb-12">
+    <div className={`min-h-screen text-ink font-sans selection:bg-gold/30 pb-12 theme-${theme}`}>
       
       {/* Exporting Overlay */}
       <AnimatePresence>
@@ -340,6 +345,15 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4">
+          <select 
+            value={theme} 
+            onChange={(e) => setTheme(e.target.value as Theme)}
+            className="bg-parchment border border-gold/50 rounded-sm px-2 py-1.5 text-xs font-bold ff-title outline-none focus:border-gold cursor-pointer hover:bg-gold/10 transition-colors"
+          >
+            {THEMES.map(t => (
+              <option key={t.id} value={t.id}>{t.label}</option>
+            ))}
+          </select>
           <button onClick={() => setDarkMode(!darkMode)} className="p-2 hover:bg-gold/10 rounded-sm transition-colors text-ink border border-gold/30">
             {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>

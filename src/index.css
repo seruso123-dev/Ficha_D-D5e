@@ -1,119 +1,210 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Cinzel:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Cinzel:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=MedievalSharp&family=UnifrakturMaguntia&family=Noto+Serif+JP:wght@400;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Cormorant Garamond", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Cinzel", ui-serif, Georgia, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond", ui-serif, Georgia, serif;
+  --font-display: "Cinzel", serif;
+  --font-fantasy: "MedievalSharp", cursive;
+  --font-gothic: "UnifrakturMaguntia", cursive;
+  --font-jp: "Noto Serif JP", serif;
   
-  --color-parchment: #dcd3b6;
-  --color-parchment-light: #e8e0c8;
-  --color-ink: #2c1e16;
-  --color-ink-light: #5c4738;
-  --color-gold: #a68a56;
-  --color-gold-light: #c9b284;
-  --color-accent-red: #8b2500;
+  --color-parchment: var(--theme-bg);
+  --color-parchment-light: var(--theme-panel-bg);
+  --color-ink: var(--theme-ink);
+  --color-ink-light: var(--theme-ink-light);
+  --color-gold: var(--theme-gold);
+  --color-gold-light: var(--theme-gold-light);
+  --color-accent-red: var(--theme-accent);
+}
+
+:root {
+  /* Default Medieval Theme Variables */
+  --theme-bg: #dcd3b6;
+  --theme-panel-bg: #e8e0c8;
+  --theme-ink: #2c1e16;
+  --theme-ink-light: #5c4738;
+  --theme-body-text: #2c1e16;
+  --theme-gold: #a68a56;
+  --theme-gold-light: #c9b284;
+  --theme-accent: #8b2500;
+  --theme-font-main: var(--font-sans);
+  --theme-font-title: var(--font-sans);
+  --theme-bg-pattern: url("https://www.transparenttextures.com/patterns/old-wall.png");
+}
+
+.theme-medieval {
+  --theme-bg: #dcd3b6;
+  --theme-panel-bg: #e8e0c8;
+  --theme-ink: #2c1e16;
+  --theme-ink-light: #5c4738;
+  --theme-gold: #a68a56;
+  --theme-gold-light: #c9b284;
+  --theme-accent: #8b2500;
+  --theme-font-main: var(--font-sans);
+  --theme-font-title: var(--font-sans);
+  --theme-bg-pattern: url("https://www.transparenttextures.com/patterns/old-wall.png");
+  --theme-bg-image: none;
+}
+
+.theme-samurai {
+  --theme-bg: #1a1a1a;
+  --theme-panel-bg: #ffffff;
+  --theme-ink: #f5f5f5; /* Light text for dark background */
+  --theme-ink-light: #a0a0a0;
+  --theme-gold: #bc002d;
+  --theme-gold-light: #ff4d4d;
+  --theme-accent: #bc002d;
+  --theme-font-main: var(--font-sans);
+  --theme-font-title: var(--font-sans);
+  --theme-bg-pattern: url("https://www.transparenttextures.com/patterns/paper-fibers.png");
+  --theme-bg-image: none;
+}
+
+.theme-samurai .ff-panel {
+  --theme-ink: #1a1a1a; /* Dark text for light panels */
+  --theme-ink-light: #4a4a4a;
+}
+
+.theme-forest {
+  --theme-bg: #1b3022;
+  --theme-panel-bg: #f0f7da;
+  --theme-ink: #f0f7da; /* Light text for dark background */
+  --theme-ink-light: #90a955;
+  --theme-gold: #31572c;
+  --theme-gold-light: #4f772d;
+  --theme-accent: #31572c;
+  --theme-font-main: var(--font-sans);
+  --theme-font-title: var(--font-sans);
+  --theme-bg-pattern: url("https://www.transparenttextures.com/patterns/dark-matter.png");
+  --theme-bg-image: none;
+}
+
+.theme-forest .ff-panel {
+  --theme-ink: #1b3022; /* Dark text for light panels */
+  --theme-ink-light: #31572c;
+}
+
+.theme-divine {
+  --theme-bg: #f8f9fa;
+  --theme-panel-bg: #ffffff;
+  --theme-ink: #212529;
+  --theme-ink-light: #6c757d;
+  --theme-gold: #d4af37;
+  --theme-gold-light: #f1c40f;
+  --theme-accent: #d4af37;
+  --theme-font-main: var(--font-sans);
+  --theme-font-title: var(--font-sans);
+  --theme-bg-pattern: url("https://www.transparenttextures.com/patterns/white-diamond.png");
+  --theme-bg-image: none;
+}
+
+.theme-desert {
+  --theme-bg: #f4a460;
+  --theme-panel-bg: #ffdead;
+  --theme-ink: #5d4037;
+  --theme-ink-light: #8b4513;
+  --theme-gold: #cd853f;
+  --theme-gold-light: #deb887;
+  --theme-accent: #a0522d;
+  --theme-font-main: var(--font-sans);
+  --theme-font-title: var(--font-sans);
+  --theme-bg-pattern: url("https://www.transparenttextures.com/patterns/sandpaper.png");
+  --theme-bg-image: none;
 }
 
 .dark {
-  --color-parchment: #0f0f0f;
-  --color-parchment-light: #1a1a1a;
-  --color-ink: #f0ead6;
-  --color-ink-light: #dcd3b6;
-  --color-gold: #c5a059;
-  --color-gold-light: #e0c9a0;
-  --color-accent-red: #ff5e1a;
+  --theme-bg: #050505;
+  --theme-panel-bg: #121212;
+  --theme-ink: #ffffff;
+  --theme-ink-light: #a0a0a0;
+  --theme-gold: #e5c100;
+  --theme-gold-light: #fff2a8;
+  --theme-accent: #ff6b2b;
+  --theme-bg-image: none;
 }
 
 body {
-  background-color: var(--color-parchment);
+  background-color: var(--theme-bg);
   background-image: 
-    radial-gradient(circle at center, transparent 0%, rgba(44, 30, 22, 0.4) 100%),
-    url("https://www.transparenttextures.com/patterns/old-wall.png");
-  color: var(--color-ink);
-  font-family: "Cormorant Garamond", serif;
+    var(--theme-bg-image),
+    radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.4) 100%),
+    var(--theme-bg-pattern);
+  background-size: cover, auto, auto;
+  color: var(--theme-ink);
+  font-family: var(--theme-font-main);
   background-attachment: fixed;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .dark body {
   background-image: 
-    radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.8) 100%),
-    url("https://www.transparenttextures.com/patterns/dark-matter.png");
+    var(--theme-bg-image),
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.05) 0%, rgba(0, 0, 0, 0.8) 100%),
+    var(--theme-bg-pattern);
 }
 
 .ff-panel {
-  background-color: rgba(232, 224, 200, 0.85);
-  background-image: url("https://www.transparenttextures.com/patterns/old-wall.png");
-  border: 2px solid var(--color-gold);
+  background-color: var(--theme-panel-bg);
+  background-image: var(--theme-bg-pattern);
+  border: 2px solid var(--theme-gold);
+  color: var(--theme-ink);
   box-shadow: 
-    inset 0 0 30px rgba(166, 138, 86, 0.2), 
-    0 6px 15px rgba(44, 30, 22, 0.3),
-    0 0 0 1px var(--color-ink);
+    inset 0 0 30px rgba(0, 0, 0, 0.05), 
+    0 6px 15px rgba(0, 0, 0, 0.2),
+    0 0 0 1px var(--theme-ink);
   position: relative;
   backdrop-filter: blur(4px);
   border-radius: 4px;
 }
 
 .dark .ff-panel {
-  background-color: rgba(26, 26, 26, 0.95);
   box-shadow: 
-    inset 0 0 30px rgba(166, 138, 86, 0.1), 
-    0 6px 15px rgba(0, 0, 0, 0.6),
-    0 0 0 1px var(--color-ink);
-}
-
-.ff-panel::before {
-  content: '';
-  position: absolute;
-  top: 3px; left: 3px; right: 3px; bottom: 3px;
-  border: 1px solid rgba(166, 138, 86, 0.6);
-  pointer-events: none;
-  border-radius: 2px;
+    inset 0 0 40px rgba(255, 255, 255, 0.02), 
+    0 10px 25px rgba(0, 0, 0, 0.9),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+  border-color: var(--theme-gold);
 }
 
 .ff-title {
-  font-family: "Cinzel", serif;
+  font-family: var(--theme-font-title);
 }
 
 .ff-input {
   background: transparent;
-  border-bottom: 1px solid rgba(166, 138, 86, 0.5);
-  color: var(--color-ink);
+  border-bottom: 1px solid var(--theme-gold);
+  color: var(--theme-ink);
   outline: none;
   transition: all 0.2s;
   font-weight: 600;
 }
 .ff-input:focus {
-  border-bottom-color: var(--color-accent-red);
+  border-bottom-color: var(--theme-accent);
 }
 .ff-input::placeholder {
-  color: rgba(92, 71, 56, 0.4);
+  color: var(--theme-ink-light);
+  opacity: 0.4;
   font-weight: 400;
-}
-.dark .ff-input::placeholder {
-  color: rgba(240, 234, 214, 0.3);
 }
 
 .ff-textarea {
-  background: rgba(44, 30, 22, 0.03);
-  border: 1px solid rgba(166, 138, 86, 0.3);
-  color: var(--color-ink);
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--theme-gold);
+  color: var(--theme-ink);
   outline: none;
   transition: all 0.2s;
 }
 .ff-textarea:focus {
-  border-color: var(--color-accent-red);
-  background: rgba(44, 30, 22, 0.05);
+  border-color: var(--theme-accent);
+  background: rgba(0, 0, 0, 0.05);
 }
 .dark .ff-textarea {
   background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(166, 138, 86, 0.4);
+  border-color: var(--theme-gold);
 }
 .ff-textarea::placeholder {
-  color: rgba(92, 71, 56, 0.4);
-}
-.dark .ff-textarea::placeholder {
-  color: rgba(240, 234, 214, 0.3);
+  color: var(--theme-ink-light);
+  opacity: 0.4;
 }
 
 @layer base {
